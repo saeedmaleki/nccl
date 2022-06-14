@@ -178,6 +178,8 @@ struct ncclWorkElemHeader {
   unsigned isLast:1;
 };
 
+#include "msccl.h"
+
 struct ncclWorkElem {
   struct ncclWorkElemHeader header;
   uint8_t regUsed;
@@ -193,7 +195,9 @@ struct ncclWorkElem {
   uint8_t bid;
   uint8_t nChannels;
   uint64_t redOpArg;
-  uint64_t pad;
+
+  struct mscclWorkElem mscclWork;
+  uint8_t pad[54];
 };
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
 
@@ -215,6 +219,7 @@ struct ncclWorkElemReg {
   void* dnInputs[NCCL_MAX_DIRECT_ARITY+1];
   void* dnOutputs[NCCL_MAX_DIRECT_ARITY+1];
   void* upOutputs[NCCL_MAX_DIRECT_ARITY+1];
+  uint8_t pad[192];
 };
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemReg) == 0, "ncclWork size must be a multiple of ncclWorkElemReg size");
 static_assert(sizeof(struct ncclWorkElemReg) % sizeof(struct ncclWorkElem) == 0, "ncclWorkElemReg size must be a multiple of ncclWorkElem size");
@@ -267,7 +272,6 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
-#include "msccl.h"
 struct ncclDevComm {
   int rank;
   int nRanks;

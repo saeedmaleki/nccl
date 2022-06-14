@@ -8,6 +8,9 @@
 #define MSCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
 #define MSCCL_MAX_NUM_ALGOS 4
 
+#define MSCCL_SLICESTEPS (NCCL_STEPS/4)
+#define MSCCL_CHUNKSTEPS (NCCL_STEPS/2)
+
 static_assert(MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= MSCCL_MAX_NUM_THREAD_BLOCKS);
 static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for more than nthreads dependences");
 
@@ -24,6 +27,13 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_LOCAL_COPY 6
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
+
+struct mscclWorkElem {
+  void * scratchbuff; // used as a scratch space
+  uint8_t mscclAlgoIndex; // identifies which msccl algorithm to use
+  uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  uint8_t pad[6];
+};
 
 // TODO: compress this by a lot!
 struct mscclTransfer {

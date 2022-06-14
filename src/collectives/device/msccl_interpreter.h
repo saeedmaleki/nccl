@@ -18,7 +18,7 @@ namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
     struct ncclDevComm* comm = &ncclShmem.comm;
-    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclAlgoIndex];
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclWork.mscclAlgoIndex];
     const int tid = threadIdx.x;
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
@@ -29,7 +29,7 @@ namespace {
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
     T* thisOutput = (T*)args->recvbuff;
-    T* thisScratch = (T*)args->scratchbuff;
+    T* thisScratch = (T*)args->mscclWork.scratchbuff;
     int recvPeer = mscclTB->recvpeer;
     int sendPeer = mscclTB->sendpeer;
 
@@ -45,18 +45,16 @@ namespace {
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
 
-    const ssize_t loopSize = chunkSize;
-    const ssize_t size = args->coll.count;
+    const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/mscclAlgo->nchunksPerLoop;
-    uint32_t mscclMaxAllowedCount = args->mscclMaxAllowedCount;
+    uint8_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int workIndex = args->index+1;
     volatile struct mscclFlag* mscclFlags = comm->mscclAlgoShared.flags;
-    mscclComputeOp_t* mscclComputeOp = &args->mscclComputeOp;
 
-    for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += loopSize, iter++) {
+    for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
       ssize_t realChunkSize;
       if (Proto::Id == NCCL_PROTO_SIMPLE) {
         realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks));
@@ -113,16 +111,6 @@ namespace {
               dstPointer[dstoffset + index] = o;
             }
             step += numReductions-1;
-          } else if (msccltran->type == MSCCL_RES_ADD) {
-            T* resPtr1 = (T*)mscclComputeOp->residualAddOp.residual1;
-            T* resPtr2 = (T*)mscclComputeOp->residualAddOp.residual2;
-            for (int index = tid; index < thisNelem; index += nThreads){
-              T r1 = resPtr1[srcoffset+index];
-              T r2 = resPtr2[srcoffset+index];
-              T o  = dstPointer[dstoffset+index];
-              o = RedOp()(o, RedOp()(r1,r2));
-              dstPointer[dstoffset+index] = o;
-            }
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
             prims.recvCopySend(dstoffset, dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
