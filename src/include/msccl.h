@@ -1,9 +1,12 @@
 #ifndef MSCCL_H_
 #define MSCCL_H_
 
+#include <stdint.h>
+
 #define MSCCL_MAX_NUM_STEPS 256
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 #define MSCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
+#define MSCCL_MAX_NUM_ALGOS 4
 
 static_assert(MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= MSCCL_MAX_NUM_THREAD_BLOCKS);
 static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for more than nthreads dependences");

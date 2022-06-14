@@ -9,7 +9,6 @@
 
 #include "nccl.h"
 #include "align.h"
-#include "msccl.h"
 #include <stdint.h>
 
 #define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
@@ -268,8 +267,7 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
-#define MSCCL_MAX_NUM_ALGOS 4
-
+#include "msccl.h"
 struct ncclDevComm {
   int rank;
   int nRanks;
