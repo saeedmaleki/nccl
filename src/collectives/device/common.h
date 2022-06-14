@@ -234,6 +234,7 @@ __device__ void NCCL_FUNC_NAME(func, algo, proto, devredop, type)() { \
 #define IMPL_COLL3(func, devredop, type, ncclType) \
   IMPL_COLL4(func, TREE,    devredop, type, ncclType) \
   IMPL_COLL4(func, RING,    devredop, type, ncclType) \
+  IMPL_COLL4(func, MSCCL,   devredop, type, ncclType) \
   IMPL_COLL4(func, COLLNET, devredop, type, ncclType)
 
 #if NCCL_TYPE == 0
