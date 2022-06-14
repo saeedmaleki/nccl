@@ -51,19 +51,19 @@ namespace {
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
-    const int workIndex = args->index+1;
+    const int workIndex = (ncclShmem.channel.index+1) % NCCL_MAX_OPS; // +1 because we do not want to start from 0 since all flags are initialized with 0
     volatile struct mscclFlag* mscclFlags = comm->mscclAlgoShared.flags;
 
     for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
       ssize_t realChunkSize;
       if (Proto::Id == NCCL_PROTO_SIMPLE) {
-        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks));
+        realChunkSize = min(chunkSize, sizePerMscclChunk-gridOffset);
         realChunkSize = roundUp(realChunkSize, (nthreads-WARP_SIZE)*sizeof(uint64_t)/sizeof(T));
       }
       else
-        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks*minChunkSize)*minChunkSize);
+        realChunkSize = min(chunkSize, divUp(sizePerMscclChunk-gridOffset, minChunkSize)*minChunkSize);
       realChunkSize = int(realChunkSize);
-      nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
+      int nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
 
       ssize_t srcoffset, dstoffset;
       T* srcPointer, * dstPointer;
@@ -87,7 +87,7 @@ namespace {
 
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-        prims.setPointers(srcPointer, dstPointer);
+        prims.setDataPtrs(srcPointer, dstPointer);
         int count = msccltran->count;
         for (int c = 0; c < count; c += mscclMaxAllowedCount) {
           srcoffset = gridOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
@@ -101,7 +101,7 @@ namespace {
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
-            for (int index = tid; index < thisNelem; index += nThreads){
+            for (int index = tid; index < thisNelem; index += nthreads){
               T o = dstPointer[dstoffset + index];
               for (int r = 0; r < numReductions; r++){
                 srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
@@ -120,13 +120,13 @@ namespace {
           else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
             prims.recvReduceCopy(srcoffset, dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_LOCAL_COPY)
-            prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+            prims.localCopy(srcoffset, dstoffset, thisNelem);
           else
             return;
         }
         if (msccltran->has_dependence){
           __syncthreads();
-          if (tid == nThreads-1){
+          if (tid == nthreads-1){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
             mscclFlags[bid].flag = curFlag;
