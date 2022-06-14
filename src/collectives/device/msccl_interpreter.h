@@ -17,7 +17,7 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
-    struct ncclDevComm* comm = args->comm;
+    struct ncclDevComm* comm = &ncclShmem.comm;
     struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclAlgoIndex];
     const int tid = threadIdx.x;
     const int nthreads = args->header.nWarps*WARP_SIZE;
