@@ -17,7 +17,7 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
-    struct ncclDevComm* comm = &ncclShmem.comm;
+/*    struct ncclDevComm* comm = &ncclShmem.comm;
     struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclWork.mscclAlgoIndex];
     const int tid = threadIdx.x;
     const int nthreads = args->header.nWarps*WARP_SIZE;
@@ -41,6 +41,8 @@ namespace {
       // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
+
+    RedOp redFn(args->redOpArg);
 
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
@@ -106,7 +108,7 @@ namespace {
               for (int r = 0; r < numReductions; r++){
                 srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
                 T t = srcPointer[srcoffset + index];
-                o = RedOp()(o, t);
+                o = redFn(o, t);
               }
               dstPointer[dstoffset + index] = o;
             }
@@ -134,6 +136,6 @@ namespace {
         }
         step++;
       }
-    }
+    }*/
   }
 }

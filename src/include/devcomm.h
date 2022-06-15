@@ -197,7 +197,7 @@ struct ncclWorkElem {
   uint64_t redOpArg;
 
   struct mscclWorkElem mscclWork;
-  uint8_t pad[54];
+  uint8_t pad[4];
 };
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
 
@@ -219,7 +219,6 @@ struct ncclWorkElemReg {
   void* dnInputs[NCCL_MAX_DIRECT_ARITY+1];
   void* dnOutputs[NCCL_MAX_DIRECT_ARITY+1];
   void* upOutputs[NCCL_MAX_DIRECT_ARITY+1];
-  uint8_t pad[192];
 };
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemReg) == 0, "ncclWork size must be a multiple of ncclWorkElemReg size");
 static_assert(sizeof(struct ncclWorkElemReg) % sizeof(struct ncclWorkElem) == 0, "ncclWorkElemReg size must be a multiple of ncclWorkElem size");
@@ -277,11 +276,6 @@ struct ncclDevComm {
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
 
-  // MSCCL related elements
-  int numberOfMSCCLAlgorithms;
-  struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
-  struct mscclAlgorithmShared mscclAlgoShared;
-
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
 
@@ -292,6 +286,8 @@ struct ncclDevComm {
 struct ncclDevCommAndChannels {
   ncclDevComm comm;
   ncclChannel channels[MAXCHANNELS];
+
+  struct mscclCommInfo mscclInfo;
 };
 
 #endif

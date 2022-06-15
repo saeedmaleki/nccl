@@ -122,7 +122,7 @@ struct ncclShmemData {
   uint64_t redOpArgs[NCCL_MAX_DIRECT_ARITY+1];
   struct ncclDevComm comm;
   struct ncclChannel channel;
-  uint64_t pad;
+  struct mscclSharedMemoryInfo mscclTB;
   struct ncclWork work;
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "shmem.work needs to be 16B aligned");
