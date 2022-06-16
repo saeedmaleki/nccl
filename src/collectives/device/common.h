@@ -122,7 +122,7 @@ struct ncclShmemData {
   uint64_t redOpArgs[NCCL_MAX_DIRECT_ARITY+1];
   struct ncclDevComm comm;
   struct ncclChannel channel;
-  struct mscclSharedMemoryInfo mscclTB;
+  struct mscclSharedMemoryInfo mscclShmem;
   struct ncclWork work;
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "shmem.work needs to be 16B aligned");
@@ -157,14 +157,25 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int bid = blockIdx.x;
 
   int turn = copyToShmem(&ncclShmem.comm, comm);
-  // get address of channel without incurring indirect load from ncclDevCom::channels
-  ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
-  turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
-  // To optimize for latency, (only) the first operation is passed as argument.
-  if (bid == 0 && first.header.type != ncclWorkTypeUnused) {
-    // Copy first elem to work and zero out the rest
-    copyToShmem(&ncclShmem.work, &first, tid, nthreads);
+  if (Algo == NCCL_ALGO_MSCCL){
+    // get the address without causing a global load
+    struct mscclThreadBlock* mscclTB = &((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgos[first.mscclWork.mscclAlgoIndex].mscclTBs[bid];
+    turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
+    // causes a global memory load to channelId. This removes the need for a __syncthreads
+    ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
+    turn = copyToShmem(&ncclShmem.channel, channel, turn);
+    
+  } else {
+    // get address of channel without incurring indirect load from ncclDevCom::channels
+    ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
+    turn = copyToShmem(&ncclShmem.channel, channel, turn);
+
+    // To optimize for latency, (only) the first operation is passed as argument.
+    if (bid == 0 && first.header.type != ncclWorkTypeUnused) {
+      // Copy first elem to work and zero out the rest
+      copyToShmem(&ncclShmem.work, &first, tid, nthreads);
+    }
   }
   __syncthreads(); // publish ncclShmem
 

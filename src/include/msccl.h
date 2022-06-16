@@ -98,16 +98,13 @@ struct mscclAlgorithm {
   // the range of size in which this algorithm is performant
   int64_t minBytes; int64_t maxBytes;
   // bid is used as an index into this array
-  struct mscclThreadBlock mscclTB[MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  struct mscclThreadBlock mscclTBs[MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by MSCCL algorithm
   int nChannels;
   // the arrays in this struct can be inferred from mscclTB. they are created to use NCCL API easily
   struct mscclChannelInfo mscclChannels[MAXCHANNELS];
   // number of scratch chunks that MSCCL will use
   int nScratchChunks;
-  //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
-  //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
-  ncclRedOp_t redOp;
 };
 
 struct mscclAlgorithmShared {
