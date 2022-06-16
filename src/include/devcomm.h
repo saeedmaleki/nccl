@@ -281,13 +281,15 @@ struct ncclDevComm {
 
   // Channels, device side
   struct ncclChannel* channels;
+
+  struct mscclDevCommInfo* mscclInfo;
 };
 
 struct ncclDevCommAndChannels {
   ncclDevComm comm;
   ncclChannel channels[MAXCHANNELS];
 
-  struct mscclDevCommInfo mscclInfo;
+  struct mscclDevCommInfo mscclInfo[1];
 };
 
 #endif

@@ -39,7 +39,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll", "CustomCollective" };
-const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
+const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "MSCCL", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
 NCCL_PARAM(GroupCudaStream, "GROUP_CUDA_STREAM", NCCL_GROUP_CUDA_STREAM);
@@ -138,6 +138,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
+  CUDACHECK(cudaFree(comm->mscclInfo.mscclHostDevCommInfo.flags));
   CUDACHECK(cudaFree((ncclDevCommAndChannels*)comm->devComm));
 
   for (int channel=0; channel<MAXCHANNELS; channel++)
@@ -172,6 +173,13 @@ static ncclResult_t commFree(ncclComm_t comm) {
     free(comm->intraCC);
   }
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
+
+  // free up MSCCL allocated scratchPad
+  if (comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer != NULL && comm->mscclInfo.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer));
+    comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer = NULL;
+    comm->mscclInfo.scratchBufferSize = 0;
+  }
 
   // Poison comm to try and catch a double free
   commPoison(comm);
@@ -276,6 +284,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   NCCLCHECK(ncclCudaCalloc(&devCommAndChans, 1));
   comm->devComm = &devCommAndChans->comm;
   comm->hostDevComm.channels = devCommAndChans->channels;
+  comm->hostDevComm.mscclInfo = devCommAndChans->mscclInfo;
 
   // Duplicate the channels on the device
   int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
@@ -285,6 +294,11 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   for (int r=0; r<comm->nChannels; r++) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
+
+  // Allocating and copying MSCCL elements
+  NCCLCHECK(ncclCudaCalloc(&comm->mscclInfo.mscclHostDevCommInfo.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  // MSCCL info is copied to the device side
+  *comm->hostDevComm.mscclInfo = comm->mscclInfo.mscclHostDevCommInfo;
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));

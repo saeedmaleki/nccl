@@ -161,7 +161,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   ncclChannel *channel;
   if (Algo == NCCL_ALGO_MSCCL){
     // get the address without causing a global load
-    struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgos[first.mscclWork.mscclAlgoIndex];
+    struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // causes a global memory load to channelId. This removes the need for a __syncthreads
@@ -171,9 +171,9 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     int t = threadIdx.x - turn;
     if (t < 0) t += blockDim.x;
     if (t == 0)
-      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo.flags;
+      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
     else if (t == WARP_SIZE)
-      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo.scratchBuffer;
+      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
     else if (t == 2*WARP_SIZE)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue

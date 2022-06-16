@@ -114,7 +114,7 @@ struct mscclSharedMemoryInfo {
   struct mscclFlag* flags;
   void* scratchBuffer;
   int nchunksPerLoop;
-  int8_t pad[4];
+  int8_t pad[8];
 };
 
 // All MSCCL algorithm info that will be in ncclDevComm
