@@ -44,7 +44,7 @@ namespace {
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
 
     const ssize_t size = args->count;
-    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/mscclAlgo->nchunksPerLoop;
+    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
     uint8_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags

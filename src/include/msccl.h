@@ -58,6 +58,7 @@ struct mscclThreadBlock {
   int16_t dependentStep[MSCCL_MAX_NUM_STEPS];
   int16_t reductionSrcOffsets[MSCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
   struct mscclTransfer transfers[MSCCL_MAX_NUM_STEPS];
+  int64_t pad;
 };
 
 #define MSCCL_MAX_COUNT 72
@@ -130,6 +131,8 @@ struct mscclSharedMemoryInfo {
   struct mscclThreadBlock mscclTB;
   struct mscclFlag* flags;
   void* scratchBuffer;
+  int nchunksPerLoop;
+  int8_t pad[4];
 };
 
 #endif

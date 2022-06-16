@@ -49,6 +49,7 @@ __device__ void copyToShmem(Tdst *dst, Tsrc const *src, int tid, int nthreads) {
   if (offset < sizeof(Tdst)/sizeof(uint64_t)) storeShmem128(shmemPtr+offset, v0, v1);
 }
 
+static_assert(0 == (sizeof(mscclThreadBlock)%8), "AAA");
 template<typename T>
 __device__ int copyToShmem(T *dst, T const *src, int turn=0) {
   static_assert(sizeof(uint64_t) <= alignof(T), "Uhoh");
@@ -157,26 +158,29 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int bid = blockIdx.x;
 
   int turn = copyToShmem(&ncclShmem.comm, comm);
-
+  ncclChannel *channel;
   if (Algo == NCCL_ALGO_MSCCL){
     // get the address without causing a global load
-    struct mscclThreadBlock* mscclTB = &((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgos[first.mscclWork.mscclAlgoIndex].mscclTBs[bid];
+    struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgos[first.mscclWork.mscclAlgoIndex];
+    struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // causes a global memory load to channelId. This removes the need for a __syncthreads
-    ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
+    channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
     // Copy scratch and flag pointers following turn logic
     int t = threadIdx.x - turn;
     if (t < 0) t += blockDim.x;
     if (t == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgoShared.flags;
-    else (t == WARP_SIZE)
+    else if (t == WARP_SIZE)
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgoShared.scratchBuffer;
+    else if (t == 2*WARP_SIZE)
+      ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
-    ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
+    channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
     // To optimize for latency, (only) the first operation is passed as argument.
