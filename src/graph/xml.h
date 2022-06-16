@@ -55,6 +55,10 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
 /* Remove unneeded parts */
 ncclResult_t ncclTopoTrimXml(struct ncclXml* xml);
 
+/* msccl file loaders */
+ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+ncclResult_t mscclGetXmlConfigFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+
 /**************/
 /* XML Struct */
 /* Functions  */
@@ -79,6 +83,13 @@ static ncclResult_t xmlGetAttr(struct ncclXmlNode* node, const char* attrName, c
   return ncclSuccess;
 }
 
+static ncclResult_t xmlAttrExists(struct ncclXmlNode* node, const char* attrName, int* exists) {
+  const char* result;
+  NCCLCHECK(xmlGetAttr(node, attrName, &result));
+  *exists = result == NULL ? 0 : 1;
+  return ncclSuccess;
+}
+
 static ncclResult_t xmlGetAttrStr(struct ncclXmlNode* node, const char* attrName, const char** value) {
   NCCLCHECK(xmlGetAttr(node, attrName, value));
   if (*value == NULL) {
@@ -91,6 +102,13 @@ static ncclResult_t xmlGetAttrInt(struct ncclXmlNode* node, const char* attrName
   const char* str;
   NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
   *value = strtol(str, NULL, 0);
+  return ncclSuccess;
+}
+
+static ncclResult_t xmlGetAttrInt64_t(struct ncclXmlNode* node, const char* attrName, int64_t* value) {
+  const char* str;
+  NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
+  *value = strtoll(str, NULL, 0);
   return ncclSuccess;
 }
 

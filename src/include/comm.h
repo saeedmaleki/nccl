@@ -210,6 +210,8 @@ struct ncclComm {
   // user-created reduction ops
   int userRedOpCapacity, userRedOpFreeHead;
   ncclUserRedOp *userRedOps;
+
+  struct mscclHostCommInfo mscclInfo;
 };
 
 // Scrambles the bits of non-builtin values of ncclRedOp_t according to the

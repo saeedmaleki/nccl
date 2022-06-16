@@ -171,9 +171,9 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     int t = threadIdx.x - turn;
     if (t < 0) t += blockDim.x;
     if (t == 0)
-      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgoShared.flags;
+      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo.flags;
     else if (t == WARP_SIZE)
-      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo.mscclAlgoShared.scratchBuffer;
+      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo.scratchBuffer;
     else if (t == 2*WARP_SIZE)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue

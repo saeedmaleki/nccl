@@ -108,24 +108,6 @@ struct mscclAlgorithm {
   int nScratchChunks;
 };
 
-struct mscclAlgorithmShared {
-  // allocate enough MSCCL flags (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
-  struct mscclFlag* flags;
-  // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
-  int flagsNeedReset;
-  // declaration for scratchBuffer. This is only to be accessed by the host
-  size_t scratchBufferSize;
-  void* scratchBuffer;
-};
-
-// All MSCCL algorithm info that will be in ncclDevComm
-struct mscclCommInfo {
-  // MSCCL related elements
-  int numberOfMSCCLAlgorithms;
-  struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
-  struct mscclAlgorithmShared mscclAlgoShared;
-};
-
 // Only related MSCCL algorithm elements necessary for a threadblock
 struct mscclSharedMemoryInfo {
   struct mscclThreadBlock mscclTB;
@@ -133,6 +115,35 @@ struct mscclSharedMemoryInfo {
   void* scratchBuffer;
   int nchunksPerLoop;
   int8_t pad[4];
+};
+
+// All MSCCL algorithm info that will be in ncclDevComm
+struct mscclDevCommInfo {
+  struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
+  // allocate enough MSCCL flags (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
+  struct mscclFlag* flags;
+  // declaration for scratchBuffer. This is only to be accessed by the host
+  void* scratchBuffer;
+};
+
+struct mscclRegistration {
+  int algoIndex;
+  int64_t minBytes;
+  int64_t maxBytes;
+  int protocol;
+};
+
+// All MSCCL algorithm info that will be in ncclComm
+struct mscclHostCommInfo {
+  int numberOfMSCCLAlgorithms;
+  mscclDevCommInfo mscclHostDevCommInfo;
+  // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
+  int flagsNeedReset;
+  size_t scratchBufferSize;
+
+  // registered algorithms
+  struct mscclRegistration *mscclRegistrations;
+  int nMscclRegistrations;
 };
 
 #endif

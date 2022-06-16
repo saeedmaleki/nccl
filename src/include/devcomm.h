@@ -11,8 +11,8 @@
 #include "align.h"
 #include <stdint.h>
 
-#define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclNumFuncs} ncclFunc_t;
+#define NCCL_NUM_FUNCTIONS 7 // Send/Recv not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclNumFuncs} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/MSCCL/CollNet
@@ -287,7 +287,7 @@ struct ncclDevCommAndChannels {
   ncclDevComm comm;
   ncclChannel channels[MAXCHANNELS];
 
-  struct mscclCommInfo mscclInfo;
+  struct mscclDevCommInfo mscclInfo;
 };
 
 #endif
