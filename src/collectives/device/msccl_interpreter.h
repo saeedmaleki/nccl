@@ -17,19 +17,15 @@
 namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
-/*    struct ncclDevComm* comm = &ncclShmem.comm;
-    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclWork.mscclAlgoIndex];
     const int tid = threadIdx.x;
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
-    struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTB[bid];
-    const int channelId = mscclTB->channelId;
-    struct ncclChannel* channel = comm->channels+channelId;
+    struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
 
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
     T* thisOutput = (T*)args->recvbuff;
-    T* thisScratch = (T*)args->mscclWork.scratchbuff;
+    T* thisScratch = (T*)ncclShmem.mscclShmem.scratchBuffer;
     int recvPeer = mscclTB->recvpeer;
     int sendPeer = mscclTB->sendpeer;
 
@@ -54,7 +50,7 @@ namespace {
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int workIndex = (ncclShmem.channel.index+1) % NCCL_MAX_OPS; // +1 because we do not want to start from 0 since all flags are initialized with 0
-    volatile struct mscclFlag* mscclFlags = comm->mscclAlgoShared.flags;
+    volatile struct mscclFlag* mscclFlags = ncclShmem.mscclShmem.flags;
 
     for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
       ssize_t realChunkSize;
@@ -136,6 +132,6 @@ namespace {
         }
         step++;
       }
-    }*/
+    }
   }
 }
