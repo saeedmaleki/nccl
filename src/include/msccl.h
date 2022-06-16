@@ -146,4 +146,7 @@ struct mscclHostCommInfo {
   int nMscclRegistrations;
 };
 
+// Stride copy for 2D alltoall
+cudaError_t strideMemcpyAsync(void* dst, const void* src, const size_t size, const int height, const int width, cudaStream_t stream);
+
 #endif
