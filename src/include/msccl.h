@@ -144,6 +144,8 @@ struct mscclHostCommInfo {
   // registered algorithms
   struct mscclRegistration *mscclRegistrations;
   int nMscclRegistrations;
+
+  int inMSCCLConnectionSetupPhase;
 };
 
 // Stride copy for 2D alltoall

@@ -16,6 +16,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "graph/topo.h"
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -357,6 +358,13 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   return ncclSuccess;
 }
 
+static ncclResult_t setupMSCCLChannel(struct ncclComm* comm, int mscclMinRequireNChannels) {
+  TRACE(NCCL_INIT, "rank %d nranks %d", comm->rank, comm->nRanks);
+  for (int channelId = comm->nChannels; channelId < mscclMinRequireNChannels; channelId++)
+    NCCLCHECK(initChannel(comm, channelId));
+  return ncclSuccess;
+}
+
 void* waitForNonNullPtr(void* p) {
   volatile void** ptr = (volatile void**) p;
   while (*ptr == NULL) sched_yield();
@@ -466,6 +474,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // We use 2 AllGathers
   // 1. { peerInfo, comm, compCap}
   // 2. { nChannels, graphInfo, topoRanks }
+
+  // needs declaration early to avoid goto compilation bug
+  int mscclMinRequireNChannels = 0;
+  int numValidMSCCLAlgos = 0;
 
   int rank = comm->rank;
   int nranks = comm->nRanks;
@@ -754,6 +766,52 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected all trees");
+
+  // Read MSCCL algorithms first, but do not connect them yet.
+
+  if (getenv("MSCCL_XML_FILES") || getenv("MSCCL_CONFIG")) {
+    struct mscclHostCommInfo* mscclInfo = &comm->mscclInfo;
+    if (getenv("MSCCL_XML_FILES")){
+      NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetInfo(getenv("MSCCL_XML_FILES"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
+    }
+    if (getenv("MSCCL_CONFIG")) {
+      NCCLCHECK(mscclGetAllAlgoFromConfigAndSetInfo(getenv("MSCCL_CONFIG"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
+    }
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        numValidMSCCLAlgos++;
+        // Make sure MSCCL at least has mscclAlgo->nChannels
+        mscclMinRequireNChannels = std::max(mscclMinRequireNChannels, mscclAlgo->nChannels);
+      } else {
+        WARN("MSCCL should have ignored all invalid algorithms at this point!");
+        return ncclInternalError;
+      }
+    }
+  }
+
+  if (numValidMSCCLAlgos > 0 && comm->nRanks > 1) {
+    // first allocate the channels if they are not allocated
+    NCCLCHECKGOTO(setupMSCCLChannel(comm, mscclMinRequireNChannels), ret, affinity_restore);
+
+    // now go over each algorithm and queue all of the necessary connections
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclInfo.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclInfo.mscclHostDevCommInfo.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+          NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nrecvPeers, mscclChannel->recvPeers, mscclChannel->nsendPeers, mscclChannel->sendPeers, 0), ret, affinity_restore);
+        }
+      }
+    }
+
+    // connect MSCCL connections
+    comm->mscclInfo.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for avoiding shared buffer for net.cc
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
+    INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
+    comm->mscclInfo.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+  }
 
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) {

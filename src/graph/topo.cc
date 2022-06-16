@@ -756,7 +756,7 @@ ncclResult_t mscclProtocolStrToId(const char *protocol, int *protocolId) {
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorithm* mscclAlgo, int rank, int nRanks) {
+ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorithm* mscclAlgo, int maxNChannels, int rank, int nRanks) {
   INFO(NCCL_INIT, "MSCCL: Parsing algorithm %s", str);
   struct ncclXml* xml;
 
@@ -849,6 +849,9 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
     mscclAlgo->inPlace = 0;
   }
 
+  if (globalNChannels > maxNChannels){
+    WARN("MSCCL: number of desired channels (%d) is more than possible ones (%d)", globalNChannels, maxNChannels);
+  }
   mscclAlgo->nChannels = globalNChannels;
   mscclAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {
@@ -1157,7 +1160,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int rank, int nRanks){
+ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks){
   INFO(NCCL_ENV, "MSCCL_XML_FILES set by environment to %s", str);
   char* tokStr = strdup(str);
   char* tmpStr;
@@ -1169,7 +1172,7 @@ ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct msccl
       break;
     }
     struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[mscclInfo->numberOfMSCCLAlgorithms];
-    if (mscclGetAlgoFromXMLAndSetAlgo(token, mscclAlgo, rank, nRanks) == ncclSuccess){
+    if (mscclGetAlgoFromXMLAndSetAlgo(token, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
       mscclInfo->numberOfMSCCLAlgorithms++;
       INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", token);
     } else {
@@ -1181,7 +1184,7 @@ ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct msccl
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int rank, int nRanks){
+ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks){
   INFO(NCCL_INIT, "MSCCL: Parsing config %s", str);
   struct ncclXml* xml;
 
@@ -1228,7 +1231,7 @@ ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHo
 
       int algoIndex = mscclInfo->numberOfMSCCLAlgorithms;
       struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[algoIndex];
-      if (mscclGetAlgoFromXMLAndSetAlgo(path, mscclAlgo, rank, nRanks) == ncclSuccess){
+      if (mscclGetAlgoFromXMLAndSetAlgo(path, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
         mscclInfo->numberOfMSCCLAlgorithms++;
         INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", path);
 
