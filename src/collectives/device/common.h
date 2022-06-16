@@ -210,6 +210,8 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
 
   SkipLoadWork:
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
+    // With MSCCL, multiple threadblocks tries to write the same value. This is safe
+    // because MSCCL only runs one algorithm in a ncclKernel.
     if (tid == 0)
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
