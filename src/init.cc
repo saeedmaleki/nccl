@@ -139,7 +139,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->mscclInfo.mscclDevInfo.flags));
+  CUDACHECK(cudaFree(comm->mscclHostComm.mscclDevComm.flags));
   CUDACHECK(cudaFree((ncclDevCommAndChannels*)comm->devComm));
 
   for (int channel=0; channel<MAXCHANNELS; channel++)
@@ -176,10 +176,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
   // free up MSCCL allocated scratchPad
-  if (comm->mscclInfo.mscclDevInfo.scratchBuffer != NULL && comm->mscclInfo.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->mscclInfo.mscclDevInfo.scratchBuffer));
-    comm->mscclInfo.mscclDevInfo.scratchBuffer = NULL;
-    comm->mscclInfo.scratchBufferSize = 0;
+  if (comm->mscclHostComm.mscclDevComm.scratchBuffer != NULL && comm->mscclHostComm.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->mscclHostComm.mscclDevComm.scratchBuffer));
+    comm->mscclHostComm.mscclDevComm.scratchBuffer = NULL;
+    comm->mscclHostComm.scratchBufferSize = 0;
   }
 
   // Poison comm to try and catch a double free
@@ -297,9 +297,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   }
 
   // Allocating and copying MSCCL elements
-  NCCLCHECK(ncclCudaCalloc(&comm->mscclInfo.mscclDevInfo.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->mscclHostComm.mscclDevComm.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // MSCCL info is copied to the device side
-  *comm->hostDevComm.mscclInfo = comm->mscclInfo.mscclDevInfo;
+  *comm->hostDevComm.mscclInfo = comm->mscclHostComm.mscclDevComm;
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
@@ -770,7 +770,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // Read MSCCL algorithms first, but do not connect them yet.
 
   if (getenv("MSCCL_XML_FILES") || getenv("MSCCL_CONFIG")) {
-    struct mscclHostCommInfo* mscclInfo = &comm->mscclInfo;
+    struct mscclHostCommInfo* mscclInfo = &comm->mscclHostComm;
     if (getenv("MSCCL_XML_FILES")){
       NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetInfo(getenv("MSCCL_XML_FILES"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
     }
@@ -778,7 +778,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       NCCLCHECK(mscclGetAllAlgoFromConfigAndSetInfo(getenv("MSCCL_CONFIG"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
     }
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[mscclAlgoIndex];
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclAlgoIndex];
       if (mscclAlgo->isValid){
         numValidMSCCLAlgos++;
         // Make sure MSCCL at least has mscclAlgo->nChannels
@@ -795,8 +795,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(setupMSCCLChannel(comm, mscclMinRequireNChannels), ret, affinity_restore);
 
     // now go over each algorithm and queue all of the necessary connections
-    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclInfo.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-      struct mscclAlgorithm* mscclAlgo = &comm->mscclInfo.mscclDevInfo.mscclAlgos[mscclAlgoIndex];
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
       if (mscclAlgo->isValid){
         for (int c=0; c<mscclAlgo->nChannels; c++) {
           struct ncclChannel* channel = comm->channels+c;
@@ -807,10 +807,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
 
     // connect MSCCL connections
-    comm->mscclInfo.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for avoiding shared buffer for net.cc
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for avoiding shared buffer for net.cc
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
-    comm->mscclInfo.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
   }
 
   // Check if we can setup CollNet

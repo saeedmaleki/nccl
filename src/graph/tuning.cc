@@ -299,3 +299,60 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
   *time = lat * latCount + (info->nBytes) / (1000 * bw);
   return ncclSuccess;
 }
+
+// checks whether the collective is inplace
+bool isInPlace(struct ncclInfo* info){
+  switch (info->coll) {
+    case ncclFuncAllReduce:
+    case ncclFuncCustomCollective:
+    case ncclFuncBroadcast:
+    case ncclFuncReduce:
+    case ncclFuncAllToAll:
+      return (info->sendbuff == info->recvbuff);
+    case ncclFuncAllGather:
+      return ((char*)info->sendbuff == (char*)info->recvbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+    case ncclFuncReduceScatter:
+      return ((char*)info->recvbuff == (char*)info->sendbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+    case ncclFuncSend:    
+    case ncclFuncRecv:    
+    case ncclFuncSendRecv:
+    default:
+      return false;    
+  }
+}
+
+ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
+  bool inPlace = isInPlace(info);
+  struct mscclHostCommInfo* mscclHostComm = &info->comm->mscclHostComm;
+  if (mscclHostComm->nMscclRegistrations > 0) {
+    for (int i = 0; i < mscclHostComm->nMscclRegistrations; ++i) {
+      struct mscclRegistration *reg = &mscclHostComm->mscclRegistrations[i];
+      if (reg->minBytes <= info->nBytes && (info->nBytes < reg->maxBytes || reg->maxBytes == -1)) {
+        struct mscclAlgorithm* mscclAlgo = &mscclHostComm->mscclDevComm.mscclAlgos[reg->algoIndex];
+        if ((mscclAlgo->isValid) && (info->comm->bandwidths[info->coll][NCCL_ALGO_MSCCL][mscclAlgo->protocol] > 0) && (mscclAlgo->collectiveType == info->coll) 
+            && (inPlace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks) && ((info->count % mscclAlgo->nchunksPerLoop) == 0)) {
+          info->algorithm = NCCL_ALGO_MSCCL;
+          info->protocol = reg->protocol;
+          info->mscclInfo.mscclAlgoIndex = reg->algoIndex;
+          return ncclSuccess;
+        }
+      }
+    }
+  } else {
+    for (int i=0; i<mscclHostComm->numberOfMSCCLAlgorithms; i++){
+      struct mscclAlgorithm* mscclAlgo = &mscclHostComm->mscclDevComm.mscclAlgos[i];
+      if ((mscclAlgo->isValid) && (info->comm->bandwidths[info->coll][NCCL_ALGO_MSCCL][mscclAlgo->protocol] > 0) 
+          && (mscclAlgo->collectiveType == info->coll) && (inPlace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks)
+          && ((info->count % mscclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= mscclAlgo->minBytes) && (info->nBytes < mscclAlgo->maxBytes)) {
+        info->algorithm = NCCL_ALGO_MSCCL;
+        info->protocol = mscclAlgo->protocol;
+        info->mscclInfo.mscclAlgoIndex = i;
+        return ncclSuccess;
+      }
+    }
+  }
+  info->algorithm = -1;
+  info->protocol = -1;
+  info->mscclInfo.mscclAlgoIndex = -1;
+  return ncclSuccess;
+}

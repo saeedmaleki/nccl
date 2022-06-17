@@ -29,9 +29,9 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_RES_ADD 8
 
 struct mscclWorkElemOrInfo {
-  uint8_t mscclAlgoIndex; // identifies which msccl algorithm to use
-  uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
-  uint8_t inPlace;
+  int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
+  int8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  int8_t inPlace;
 };
 
 // TODO: compress this by a lot!
@@ -137,7 +137,7 @@ struct mscclRegistration {
 // All MSCCL algorithm info that will be in ncclComm
 struct mscclHostCommInfo {
   int numberOfMSCCLAlgorithms;
-  mscclDevCommInfo mscclDevInfo;
+  mscclDevCommInfo mscclDevComm;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
   size_t scratchBufferSize;

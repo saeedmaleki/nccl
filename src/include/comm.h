@@ -211,7 +211,7 @@ struct ncclComm {
   int userRedOpCapacity, userRedOpFreeHead;
   ncclUserRedOp *userRedOps;
 
-  struct mscclHostCommInfo mscclInfo;
+  struct mscclHostCommInfo mscclHostComm;
 };
 
 // Scrambles the bits of non-builtin values of ncclRedOp_t according to the

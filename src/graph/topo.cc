@@ -1171,7 +1171,7 @@ ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct msccl
       WARN("MSCCL: too many algorithms (%d) specified in environment variable MSCCL_XML_FILES. The rest will be ignored.", mscclInfo->numberOfMSCCLAlgorithms);
       break;
     }
-    struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[mscclInfo->numberOfMSCCLAlgorithms];
+    struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclInfo->numberOfMSCCLAlgorithms];
     if (mscclGetAlgoFromXMLAndSetAlgo(token, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
       mscclInfo->numberOfMSCCLAlgorithms++;
       INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", token);
@@ -1230,7 +1230,7 @@ ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHo
       }
 
       int algoIndex = mscclInfo->numberOfMSCCLAlgorithms;
-      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[algoIndex];
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[algoIndex];
       if (mscclGetAlgoFromXMLAndSetAlgo(path, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
         mscclInfo->numberOfMSCCLAlgorithms++;
         INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", path);

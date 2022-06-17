@@ -430,27 +430,26 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     info->protocol = NCCL_PROTO_SIMPLE;
   }
   else {
-    // if it is already decided that this is a MSCCL algorithm, then skip this function
-    if (info->mscclInfo.mscclAlgoIndex){
-      info->algorithm = NCCL_ALGO_MSCCL;
-      struct mscclAlgorithm* mscclAlgo = &info->comm->mscclInfo.mscclDevInfo.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
-      info->protocol = mscclAlgo->protocol;
-      info->nChannels = mscclAlgo->nChannels;
-    } else {
+    // if it is already decided that this is a MSCCL algorithm, then skip this part
+    if (info->algorithm != NCCL_ALGO_MSCCL){
       float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
       // Find algorithm / protocol.
       info->algorithm = -1;
       info->protocol = -1;
-      int nAlgos = NCCL_NUM_ALGORITHMS;
-      for (int a=0; a<nAlgos; a++) {
-        if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
-        for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-          float time;
-          NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
-          if (time >= 0 && time < minTime) {
-            info->algorithm = a;
-            info->protocol = p;
-            minTime = time;
+      NCCLCHECK(ncclTopoGetMSCCLAlgo(info));
+      if (info->algorithm != NCCL_ALGO_MSCCL){
+        int nAlgos = NCCL_NUM_ALGORITHMS;
+        for (int a=0; a<nAlgos; a++) {
+          if (a == NCCL_ALGO_MSCCL) continue;
+          if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
+          for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+            float time;
+            NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
+            if (time >= 0 && time < minTime) {
+              info->algorithm = a;
+              info->protocol = p;
+              minTime = time;
+            }
           }
         }
       }
@@ -537,6 +536,11 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
+    case ncclPatternMSCCL:
+      // MSCCL needs a specific number of steps per loop for each channel/connection and therefore needs a variable number for each proxy. 
+      // So it is set properly in ncclProxySaveColl
+      // n chunks per loop identifies how many chunks from the input buffer is processed in each iteration.
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nchunksPerLoop; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -545,20 +549,20 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
 }
 
 static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
-  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclInfo.mscclDevInfo.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
-  struct mscclHostCommInfo* mscclInfo = &info->comm->mscclInfo;
+  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+  struct mscclHostCommInfo* mscclInfo = &info->comm->mscclHostComm;
   size_t sizeNeeded = (info->nBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
   if (sizeNeeded > mscclInfo->scratchBufferSize){
-    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevInfo.scratchBuffer != NULL){
-      CUDACHECK(cudaFree(mscclInfo->mscclDevInfo.scratchBuffer));
+    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevComm.scratchBuffer != NULL){
+      CUDACHECK(cudaFree(mscclInfo->mscclDevComm.scratchBuffer));
     }
-    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevInfo.scratchBuffer, sizeNeeded));
+    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeNeeded));
     mscclInfo->scratchBufferSize = sizeNeeded;
     // Not accessing any memory location on the device memory, but just getting their address
     // Also make a dependence on the stream so that we wait for the previous call to be finished
     // This hopefully happens very infrequently.
     CUDACHECK(cudaMemcpyAsync((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), 
-      (char**)&mscclInfo->mscclDevInfo.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
+      (char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
   }
   return ncclSuccess;
 }
@@ -599,8 +603,8 @@ comp_next:
   work->header.funcIndex = FUNC_INDEX(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING || info->algorithm == NCCL_ALGO_MSCCL)) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING || info->algorithm == NCCL_ALGO_MSCCL)) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize
@@ -643,7 +647,9 @@ comp_next:
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-  int nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
+  // msccl might use multiple channels per loop. therefore, the division by info->comm->mscclAlgo.nChannels is necessary if the algo is MSCCL.
+  int nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_MSCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  // nsteps is completely incorrect for MSCCL algorithm. See getLoopInfo. It will be adjusted properly in ncclProxySaveColl.
   proxyOp->nsteps = info->nstepsPerLoop * nLoops * chunkSteps;
   proxyOp->sliceSteps = sliceSteps;
   proxyOp->chunkSteps = chunkSteps;
@@ -655,6 +661,23 @@ comp_next:
                      info->op;
   proxyOp->pattern = info->pattern;
   proxyOp->root = info->root;
+
+  // MSCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
+  // TODO: this concept will be removed in later versions.
+  if (info->algorithm == NCCL_ALGO_MSCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
+    WARN("MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
+    return ncclInvalidUsage;
+  }
+
+  if (info->algorithm == NCCL_ALGO_MSCCL) {
+    int mscclMaxAllowedCount = 0;
+    if (info->nBytes > 0)
+      mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+    info->mscclInfo.mscclMaxAllowedCount = mscclMaxAllowedCount;
+    work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
+  }
+
+
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up

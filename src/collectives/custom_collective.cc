@@ -15,6 +15,6 @@ ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t c
   struct ncclInfo info = { ncclFuncCustomCollective, "CustomCollective",
     sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
     MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS };
-  // info.mscclAlgoIndex = mscclAlgorithmIndex;
+  info.mscclInfo.mscclAlgoIndex = mscclAlgorithmIndex;
   return ncclEnqueueCheck(&info);
 }
