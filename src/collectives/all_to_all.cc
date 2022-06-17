@@ -96,7 +96,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
           struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
                                   sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
                                   MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
-          // info.mscclWorkElemOrInfo.mscclAlgoIndex = mscclAlgoIndex;
+          info.mscclInfo.mscclAlgoIndex = mscclAlgoIndex;
           return ncclEnqueueCheck(&info);
         }
       }
