@@ -139,7 +139,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->mscclInfo.mscclHostDevCommInfo.flags));
+  CUDACHECK(cudaFree(comm->mscclInfo.mscclDevInfo.flags));
   CUDACHECK(cudaFree((ncclDevCommAndChannels*)comm->devComm));
 
   for (int channel=0; channel<MAXCHANNELS; channel++)
@@ -176,9 +176,9 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
   // free up MSCCL allocated scratchPad
-  if (comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer != NULL && comm->mscclInfo.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer));
-    comm->mscclInfo.mscclHostDevCommInfo.scratchBuffer = NULL;
+  if (comm->mscclInfo.mscclDevInfo.scratchBuffer != NULL && comm->mscclInfo.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->mscclInfo.mscclDevInfo.scratchBuffer));
+    comm->mscclInfo.mscclDevInfo.scratchBuffer = NULL;
     comm->mscclInfo.scratchBufferSize = 0;
   }
 
@@ -297,9 +297,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   }
 
   // Allocating and copying MSCCL elements
-  NCCLCHECK(ncclCudaCalloc(&comm->mscclInfo.mscclHostDevCommInfo.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->mscclInfo.mscclDevInfo.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // MSCCL info is copied to the device side
-  *comm->hostDevComm.mscclInfo = comm->mscclInfo.mscclHostDevCommInfo;
+  *comm->hostDevComm.mscclInfo = comm->mscclInfo.mscclDevInfo;
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
@@ -778,7 +778,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
       NCCLCHECK(mscclGetAllAlgoFromConfigAndSetInfo(getenv("MSCCL_CONFIG"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
     }
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[mscclAlgoIndex];
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[mscclAlgoIndex];
       if (mscclAlgo->isValid){
         numValidMSCCLAlgos++;
         // Make sure MSCCL at least has mscclAlgo->nChannels
@@ -796,7 +796,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
     // now go over each algorithm and queue all of the necessary connections
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclInfo.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-      struct mscclAlgorithm* mscclAlgo = &comm->mscclInfo.mscclHostDevCommInfo.mscclAlgos[mscclAlgoIndex];
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclInfo.mscclDevInfo.mscclAlgos[mscclAlgoIndex];
       if (mscclAlgo->isValid){
         for (int c=0; c<mscclAlgo->nChannels; c++) {
           struct ncclChannel* channel = comm->channels+c;

@@ -58,7 +58,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
       struct mscclRegistration *reg = &mscclInfo->mscclRegistrations[i];
       if (reg->minBytes <= nbytes && (nbytes < reg->maxBytes || reg->maxBytes == -1))
       {
-        struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[reg->algoIndex];
+        struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[reg->algoIndex];
         if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) && ((allcount % mscclAlgo->nchunksPerLoop) == 0))
         {
           // if it was the 2D algorithm, select it first.
@@ -84,7 +84,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
   {
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++)
     {
-      struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclHostDevCommInfo.mscclAlgos[mscclAlgoIndex];
+      struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclDevInfo.mscclAlgos[mscclAlgoIndex];
       if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) 
         && ((allcount % mscclAlgo->nchunksPerLoop) == 0) && (nbytes >= mscclAlgo->minBytes) && (nbytes < mscclAlgo->maxBytes))
       {

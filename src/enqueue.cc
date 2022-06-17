@@ -430,20 +430,28 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     info->protocol = NCCL_PROTO_SIMPLE;
   }
   else {
-    float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
-    // Find algorithm / protocol.
-    info->algorithm = -1;
-    info->protocol = -1;
-    int nAlgos = NCCL_NUM_ALGORITHMS;
-    for (int a=0; a<nAlgos; a++) {
-      if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
-      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        float time;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
-        if (time >= 0 && time < minTime) {
-          info->algorithm = a;
-          info->protocol = p;
-          minTime = time;
+    // if it is already decided that this is a MSCCL algorithm, then skip this function
+    if (info->mscclInfo.mscclAlgoIndex){
+      info->algorithm = NCCL_ALGO_MSCCL;
+      struct mscclAlgorithm* mscclAlgo = &info->comm->mscclInfo.mscclDevInfo.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+      info->protocol = mscclAlgo->protocol;
+      info->nChannels = mscclAlgo->nChannels;
+    } else {
+      float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
+      // Find algorithm / protocol.
+      info->algorithm = -1;
+      info->protocol = -1;
+      int nAlgos = NCCL_NUM_ALGORITHMS;
+      for (int a=0; a<nAlgos; a++) {
+        if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
+        for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+          float time;
+          NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
+          if (time >= 0 && time < minTime) {
+            info->algorithm = a;
+            info->protocol = p;
+            minTime = time;
+          }
         }
       }
     }
@@ -489,6 +497,11 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
 }
 
 static ncclResult_t getPatternInfo(struct ncclInfo* info) {
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    // in case the algorithm is MSCCL, the proxy args are handled differently
+    info->pattern = ncclPatternMSCCL;
+    return ncclSuccess;
+  }
   switch (info->coll) {
     case ncclFuncBroadcast:
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeDown : ncclPatternPipelineFrom; break;
@@ -499,6 +512,10 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUpDown : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
+    case ncclFuncAllToAll:
+    case ncclFuncCustomCollective:
+      WARN("MSCCL: AllToAll/CustomCollective algorithm must have been set by now or defaulted to P2P instead");
+      return ncclInternalError;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -527,6 +544,22 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
+static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
+  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclInfo.mscclDevInfo.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+  struct mscclHostCommInfo* mscclInfo = &info->comm->mscclInfo;
+  size_t sizeNeeded = (info->nBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
+  if (sizeNeeded > mscclInfo->scratchBufferSize){
+    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevInfo.scratchBuffer != NULL){
+      CUDACHECK(cudaFree(mscclInfo->mscclDevInfo.scratchBuffer));
+    }
+    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevInfo.scratchBuffer, sizeNeeded));
+    mscclInfo->scratchBufferSize = sizeNeeded;
+    // Not accessing any memory location on the device memory, but just getting their address
+    NCCLCHECK(ncclCudaMemcpy((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), (char**)&mscclInfo->mscclDevInfo.scratchBuffer, 1));
+  }
+  return ncclSuccess;
+}
+
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyOp* proxyOp /* output */) {
   int collNetTypeSupport = 0;
   // Check whether algo and proto have been preset (as in aggregation case)
@@ -540,6 +573,9 @@ comp_next:
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
+  if (info->algorithm == NCCL_ALGO_MSCCL)
+    NCCLCHECK(adjustMSCCLScratchPad(info));
+
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
   work->recvbuff = info->recvbuff;
@@ -549,6 +585,7 @@ comp_next:
   work->header.nWarps = info->nThreads / WARP_SIZE;
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
+  work->mscclWork = info->mscclInfo;
 
   if (info->comm->nRanks == 1) {
     // one-rank reduce index
