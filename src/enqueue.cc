@@ -555,7 +555,10 @@ static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
     NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevInfo.scratchBuffer, sizeNeeded));
     mscclInfo->scratchBufferSize = sizeNeeded;
     // Not accessing any memory location on the device memory, but just getting their address
-    NCCLCHECK(ncclCudaMemcpy((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), (char**)&mscclInfo->mscclDevInfo.scratchBuffer, 1));
+    // Also make a dependence on the stream so that we wait for the previous call to be finished
+    // This hopefully happens very infrequently.
+    CUDACHECK(cudaMemcpyAsync((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), 
+      (char**)&mscclInfo->mscclDevInfo.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
   }
   return ncclSuccess;
 }
