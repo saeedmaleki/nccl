@@ -175,7 +175,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   // Protocols/Algorithms enable/disable, and user overrides.
   // All are enabled except ll128 which is enabled by default only in certain cases.
   int protoEnable[NCCL_NUM_PROTOCOLS] = { 1, 2, 1 };
-  int algoEnable[NCCL_NUM_ALGORITHMS] = { 1, 1, 1 };
+  int algoEnable[NCCL_NUM_ALGORITHMS] = { 1, 1, 0, 1 }; // MSCCL algorithms are disabled by default
 
   const char *protoStr = getenv("NCCL_PROTO");
   if (protoStr) {
@@ -191,7 +191,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   if (comm->collNetSupport == 0) {
     algoEnable[NCCL_ALGO_COLLNET] = 0;
     // If user has hard set NCCL_ALGO=COLLNET, ignore it
-    if (algoEnable[NCCL_ALGO_RING] == 0 && algoEnable[NCCL_ALGO_TREE] == 0) {
+    if (algoEnable[NCCL_ALGO_RING] == 0 && algoEnable[NCCL_ALGO_TREE] == 0 && algoEnable[NCCL_ALGO_MSCCL] == 0) {
       algoEnable[NCCL_ALGO_RING] = algoEnable[NCCL_ALGO_TREE] = 1;
       if (comm->rank == 0) WARN("CollNet is not supported or fails to initialize, ignoring NCCL_ALGO=COLLNET");
     }
@@ -245,6 +245,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   comm->threadThresholds[NCCL_ALGO_RING][NCCL_PROTO_LL] *= nRanks;
   comm->threadThresholds[NCCL_ALGO_COLLNET][NCCL_PROTO_SIMPLE] = 512;
 
+  // TODO: MSCCL needs such thresholds as well in the future.
   // Override defaults with user env
   char* str = getenv("NCCL_THREAD_THRESHOLDS");
   if (str) {
@@ -258,13 +259,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     }
   }
 
-  INFO(NCCL_INIT, "threadThresholds %ld/%ld/%ld | %ld/%ld/%ld | %ld/%ld/%ld",
+  INFO(NCCL_INIT, "threadThresholds %ld/%ld/%ld | %ld/%ld/%ld | %ld/%ld/%ld | %ld/%ld/%ld",
       comm->threadThresholds[NCCL_ALGO_TREE][NCCL_PROTO_LL],
       comm->threadThresholds[NCCL_ALGO_TREE][NCCL_PROTO_LL128],
       comm->threadThresholds[NCCL_ALGO_TREE][NCCL_PROTO_SIMPLE],
       comm->threadThresholds[NCCL_ALGO_RING][NCCL_PROTO_LL],
       comm->threadThresholds[NCCL_ALGO_RING][NCCL_PROTO_LL128],
       comm->threadThresholds[NCCL_ALGO_RING][NCCL_PROTO_SIMPLE],
+      comm->threadThresholds[NCCL_ALGO_MSCCL][NCCL_PROTO_LL],
+      comm->threadThresholds[NCCL_ALGO_MSCCL][NCCL_PROTO_LL128],
+      comm->threadThresholds[NCCL_ALGO_MSCCL][NCCL_PROTO_SIMPLE],      
       comm->threadThresholds[NCCL_ALGO_COLLNET][NCCL_PROTO_LL],
       comm->threadThresholds[NCCL_ALGO_COLLNET][NCCL_PROTO_LL128],
       comm->threadThresholds[NCCL_ALGO_COLLNET][NCCL_PROTO_SIMPLE]);
