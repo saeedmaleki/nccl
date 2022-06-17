@@ -28,9 +28,10 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
 
-struct mscclWorkElem {
+struct mscclWorkElemOrInfo {
   uint8_t mscclAlgoIndex; // identifies which msccl algorithm to use
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  uint8_t inPlace;
 };
 
 // TODO: compress this by a lot!

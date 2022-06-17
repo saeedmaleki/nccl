@@ -52,6 +52,8 @@ struct ncclInfo {
   int nchunksPerLoop;
   int chunkSize;
   int channelId;
+
+  struct mscclWorkElemOrInfo mscclInfo;
 };
 
 #endif

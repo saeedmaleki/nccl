@@ -22,6 +22,7 @@
 #define NCCL_FUNC4(func, devredop, type) \
   (void*)NCCL_FUNC5(func, TREE,    devredop, type), \
   (void*)NCCL_FUNC5(func, RING,    devredop, type), \
+  (void*)NCCL_FUNC5(func, MSCCL,   devredop, type), \
   (void*)NCCL_FUNC5(func, COLLNET, devredop, type)
 
 #if defined(__CUDA_BF16_TYPES_EXIST__)
