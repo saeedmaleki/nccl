@@ -216,11 +216,11 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
     }
     channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].header.isLast = 1;
 
-    if (c == 0) {
-      // As we inline the first coll directly, we can free it immediately.
-      // Except P2P or aggregation or registration cases
-      struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
-      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1)
+    struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
+    // As we inline the first coll directly, we can free it immediately.
+    // Except P2P or aggregation or registration cases
+    // also, for any MSCCL algorithm, we are sure it is the only one queued and can freed on all channels immediately
+    if ((work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1) && ((c == 0) || work->elems->mscclInfo.mscclAlgoIndex >= 0)) {
         work->header.type = ncclWorkTypeUnused;
     }
 
@@ -490,6 +490,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     if (info->algorithm == NCCL_ALGO_TREE) nt += 3*WARP_SIZE;
     if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
   }
+  if (info->algorithm == NCCL_ALGO_MSCCL) nc = comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nChannels;
   info->nChannels = nc;
   info->nThreads = nt;
   return ncclSuccess;
