@@ -365,7 +365,7 @@ static ncclResult_t SaveProxy(struct ncclChannel* channel, int type, int peer, s
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks) {
+ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElemOrInfo* mscclInfo) {
   struct ncclChannel* channel = comm->channels+op->channelId;
   int pattern = op->pattern;
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
@@ -385,6 +385,33 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
     for (int i=0; i< NCCL_MAX_TREE_ARITY; i++) NCCLCHECK(SaveProxy(channel, proxySend, tree->down[i], op, 0));
     NCCLCHECK(SaveProxy(channel, proxyRecv, tree->up, op, 0));
   }
+
+  if (pattern == ncclPatternMSCCL){
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclInfo->mscclAlgoIndex];
+    int mscclMaxAllowedCount = mscclInfo->mscclMaxAllowedCount;
+    mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[op->channelId];
+    // nsteps is adjusted here for MSCCL algo
+    for (int i=0; i<mscclChannel->nrecvPeers; i++){
+      int nrecvs = 0;
+      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j+1,mscclMaxAllowedCount);
+        nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
+      }
+      op->nsteps *= nrecvs;
+      NCCLCHECK(SaveProxy(channel, proxyRecv, mscclChannel->recvPeers[i], op, 0));
+    }
+    for (int i=0; i<mscclChannel->nsendPeers; i++){
+      int nsends = 0;
+      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j+1,mscclMaxAllowedCount);
+        nsends += mscclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
+      }
+
+      op->nsteps *= nsends;
+      NCCLCHECK(SaveProxy(channel, proxySend, mscclChannel->sendPeers[i], op, 0));
+    }
+  }
+
   if (pattern == ncclPatternCollTreeUpDown) {
     // CollTree up
     NCCLCHECK(SaveProxy(channel, proxySend, channel->collTree.out, op, 1));  // For CollTree up, we are using push

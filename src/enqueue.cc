@@ -772,6 +772,12 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
     return ncclSuccess;
   }
 
+  // MSCCL flags need to be reset every time we hit the end of the fifo queue
+  if (info->comm->mscclHostComm.flagsNeedReset == 1){
+    CUDACHECK(cudaMemsetAsync(info->comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+    info->comm->mscclHostComm.flagsNeedReset = 0;
+  }
+
   // Compute cuda kernel arg and proxy arg templates
   struct ncclQueueElem* eqElem;
   NCCLCHECK(comm->enqueueInfo->elemList->getNewElem(&eqElem));
@@ -780,10 +786,19 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
 
   // Determine grid size
   struct cudaLaunchParams* params = comm->myParams;
-  params->gridDim.x += info->nChannels;
-  params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+  // In case we have an MSCCL algorithm, there is only one in the queue.
   params->blockDim.x = std::max<unsigned>(params->blockDim.x, info->nThreads);
-  comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    params->gridDim.x = 0;
+    struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+    for (int c = 0; c < mscclAlgo->nChannels; c++)
+      params->gridDim.x += mscclAlgo->mscclChannels[c].nBlocksForChannel;
+    comm->enqueueInfo->maxChannels = info->nChannels;    // params may be varied by a second graph hence we need to capture it here
+  } else {
+    params->gridDim.x += info->nChannels;
+    params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+    comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
+  }
 
   // Inline the first kernel
   if (params->func == NULL) {
@@ -873,6 +888,10 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     int allCollNetSupport = comm->collNetSupport;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
+      if (info->algorithm == NCCL_ALGO_MSCCL){
+        WARN("MSCCL is not supposed to be used in async mode with more than one collective at a time");
+        return ncclInvalidUsage;
+      }
       info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
@@ -1133,7 +1152,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     // Proxy
     proxyOp->channelId = channelId;
     proxyOp->opCount = comm->collOpCount;
-    if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks));
+    if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
 
     elem->bid = bid % nChannels;
     struct ncclWork* w = NULL;
