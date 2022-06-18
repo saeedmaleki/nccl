@@ -1151,6 +1151,9 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             WARN("MSCCL: threadblock %d is missing", i);
             return ncclInvalidUsage;
           }
+          if (blockExists[i] == 1){
+            mscclAlgo->nBlocks = i+1;
+          }
         }
       }
     }

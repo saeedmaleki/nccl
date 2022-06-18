@@ -103,6 +103,8 @@ struct mscclAlgorithm {
   struct mscclThreadBlock mscclTBs[MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by MSCCL algorithm
   int nChannels;
+  // number of necessary threadblock
+  int nBlocks;
   // the arrays in this struct can be inferred from mscclTB. they are created to use NCCL API easily
   struct mscclChannelInfo mscclChannels[MAXCHANNELS];
   // number of scratch chunks that MSCCL will use

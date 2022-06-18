@@ -178,6 +178,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(w->elems, base, sizeof(struct ncclWorkElem));
+  if (!base) w->elems->mscclWork.mscclAlgoIndex = -1; // make sure no msccl algo is used in case this is an empty work
   channel->workFifoTail++;
   channel->workCount++;
   if (work) *work = w;
@@ -192,11 +193,22 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
   // In graph mode, enqueue is async to capture, myParams can have been changed
   struct cudaLaunchParams* params = comm->myParams;
 
+  struct mscclAlgorithm* mscclAlgo = NULL;
+  if (eqInfo->elemList->count() == 1 && work->header.type == ncclWorkTypeColl && 
+      eqInfo->elemList->begin().elems->mscclWork.mscclAlgoIndex >= -1) {
+    mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[eqInfo->elemList->begin().elems->mscclWork.mscclAlgoIndex];
+  }
+
   // Only launch blocks where we have work to do.
   // This is not supported when we are in cudaGraph mode.
   // Because in cudaGraph mode the launch param needs to be determined
   // at capture time instead of launch time.
   if (!usingCudaGraph) {
+    if (mscclAlgo){
+      // If we are using msccl, we need to set number of blocks and channels differently
+      params->girdDim.x = mscclAlgo->nBlocks;
+      eqInfo->maxChannels = mscclAlgo->nChannels;
+    }
     int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
     for (int c=0; c<nChannels; c++) {
       if (comm->channels[c].workCount) params->gridDim.x = c+1;
@@ -216,14 +228,14 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
     }
     channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].header.isLast = 1;
 
-    struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
-    // As we inline the first coll directly, we can free it immediately.
-    // Except P2P or aggregation or registration cases
-    // also, for any MSCCL algorithm, we are sure it is the only one queued and can freed on all channels immediately
-    if ((work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1) && ((c == 0) || work->elems->mscclInfo.mscclAlgoIndex >= 0)) {
+    if (c == 0 || mscclAlgo) {
+      // As we inline the first coll directly, we can free it immediately.
+      // Except P2P or aggregation or registration cases
+      struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
+      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1)
         work->header.type = ncclWorkTypeUnused;
     }
-
+    
     if (channel->gdrMemDesc) {
       // GDRCOPY support
       uint64_t first = (channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS;
@@ -792,9 +804,8 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
   if (info->algorithm == NCCL_ALGO_MSCCL){
     params->gridDim.x = 0;
     struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
-    for (int c = 0; c < mscclAlgo->nChannels; c++)
-      params->gridDim.x += mscclAlgo->mscclChannels[c].nBlocksForChannel;
-    comm->enqueueInfo->maxChannels = info->nChannels;    // params may be varied by a second graph hence we need to capture it here
+    params->gridDim.x = mscclAlgo->nBlocks;
+    comm->enqueueInfo->maxChannels = info->nChannels; // params may be varied by a second graph hence we need to capture it here
   } else {
     params->gridDim.x += info->nChannels;
     params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
