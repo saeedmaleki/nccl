@@ -194,9 +194,11 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
   struct cudaLaunchParams* params = comm->myParams;
 
   struct mscclAlgorithm* mscclAlgo = NULL;
-  if (eqInfo->elemList->count() == 1 && work->header.type == ncclWorkTypeColl && 
-      eqInfo->elemList->begin().elems->mscclWork.mscclAlgoIndex >= -1) {
-    mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[eqInfo->elemList->begin().elems->mscclWork.mscclAlgoIndex];
+  if (eqInfo->elemList->count() == 1) {
+    struct ncclWrok* w = &eqInfo->elemList->begin()->work;
+    int mscclAlgoIndex = w->elems->mscclWorkl.mscclAlgoIndex;  
+    if (w->header.type == ncclWorkTypeColl && mscclAlgoIndex >= -1)
+      mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
   }
 
   // Only launch blocks where we have work to do.
