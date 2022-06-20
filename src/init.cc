@@ -298,8 +298,6 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   // Allocating and copying MSCCL elements
   NCCLCHECK(ncclCudaCalloc(&comm->mscclHostComm.mscclDevComm.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
-  // MSCCL info is copied to the device side
-  *comm->hostDevComm.mscclInfo = comm->mscclHostComm.mscclDevComm;
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));

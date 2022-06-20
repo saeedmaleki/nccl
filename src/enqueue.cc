@@ -195,9 +195,9 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
 
   struct mscclAlgorithm* mscclAlgo = NULL;
   if (eqInfo->elemList->count() == 1) {
-    struct ncclWrok* w = &eqInfo->elemList->begin()->work;
-    int mscclAlgoIndex = w->elems->mscclWorkl.mscclAlgoIndex;  
-    if (w->header.type == ncclWorkTypeColl && mscclAlgoIndex >= -1)
+    auto w = &eqInfo->elemList->begin()->work;
+    int mscclAlgoIndex = w->elems->mscclWork.mscclAlgoIndex;  
+    if (w->header.type == ncclWorkTypeColl && mscclAlgoIndex >= 0)
       mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
   }
 
@@ -208,7 +208,7 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
   if (!usingCudaGraph) {
     if (mscclAlgo){
       // If we are using msccl, we need to set number of blocks and channels differently
-      params->girdDim.x = mscclAlgo->nBlocks;
+      params->gridDim.x = mscclAlgo->nBlocks;
       eqInfo->maxChannels = mscclAlgo->nChannels;
     }
     int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
