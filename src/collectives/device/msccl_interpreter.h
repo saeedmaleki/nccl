@@ -21,6 +21,7 @@ namespace {
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
     struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
+    if (tid == 0) printf("1: inter: bid %d gridDim.x %d\n", bid, (int) gridDim.x);
 
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
@@ -67,6 +68,7 @@ namespace {
       T* srcPointer, * dstPointer;
       int step = 0;
       for (int i = 0; i < mscclTB->nsteps; i++){
+        if (tid == 0) printf("inter: bid %d step %d\n", bid, step);
         struct mscclTransfer* msccltran = &mscclTB->transfers[i];
         // first wait if there is a dependence
         int16_t dependentPointer = msccltran->depencePointer;

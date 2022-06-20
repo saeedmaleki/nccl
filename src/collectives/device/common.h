@@ -161,23 +161,29 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   ncclChannel *channel;
   if (Algo == NCCL_ALGO_MSCCL){
     // get the address without causing a global load
+    __syncthreads(); if (tid == 0) printf("1:bid = %d algo = %d\n", bid, Algo);
     struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
+    __syncthreads(); if (tid == 0) printf("2:bid = %d algo = %d\n", bid, Algo);
     // causes a global memory load to channelId. This removes the need for a __syncthreads
     channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
     // Copy scratch and flag pointers following turn logic
+    __syncthreads(); if (tid == 0) printf("3:bid = %d algo = %d\n", bid, Algo);
     int t = threadIdx.x - turn;
     if (t < 0) t += blockDim.x;
+    __syncthreads(); if (tid == 0) printf("4:bid = %d algo = %d\n", bid, Algo);
     if (t == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
     else if (t == WARP_SIZE)
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
     else if (t == 2*WARP_SIZE)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
+    __syncthreads(); if (tid == 0) printf("5:bid = %d algo = %d\n", bid, Algo);
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
+    __syncthreads(); if (tid == 0) printf("6:bid = %d algo = %d\n", bid, Algo);
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
@@ -195,7 +201,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   ncclWork *workFifoDev = ncclShmem.channel.workFifoDev;
   int workFifoIx = ncclShmem.channel.index;
 
-  if (bid == 0 && first.header.type != ncclWorkTypeUnused)
+  if ((Algo == NCCL_ALGO_MSCCL || bid == 0) && first.header.type != ncclWorkTypeUnused)
     goto SkipLoadWork;
 
   while (true) {
@@ -228,6 +234,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
 
+    if (tid == 0) printf("Here %d isLast %d\n", bid, (int)ncclShmem.work.header.isLast);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }

@@ -210,12 +210,13 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       // If we are using msccl, we need to set number of blocks and channels differently
       params->gridDim.x = mscclAlgo->nBlocks;
       eqInfo->maxChannels = mscclAlgo->nChannels;
+    } else {
+      int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
+      for (int c=0; c<nChannels; c++) {
+        if (comm->channels[c].workCount) params->gridDim.x = c+1;
+      }
+      eqInfo->maxChannels = params->gridDim.x;
     }
-    int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
-    for (int c=0; c<nChannels; c++) {
-      if (comm->channels[c].workCount) params->gridDim.x = c+1;
-    }
-    eqInfo->maxChannels = params->gridDim.x;
   }
 
   // Set isLast = 1 for the last operation and add a no-op on empty channels (p2p case).
@@ -680,14 +681,18 @@ comp_next:
   // MSCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
   // TODO: this concept will be removed in later versions.
   if (info->algorithm == NCCL_ALGO_MSCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
-    WARN("MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
-    return ncclInvalidUsage;
+    WARN("MSCCL: something went wrong. MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
+    return ncclInternalError;
   }
 
   if (info->algorithm == NCCL_ALGO_MSCCL) {
-    int mscclMaxAllowedCount = 0;
+    int64_t mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
       mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+    if (mscclMaxAllowedCount == 0){
+      WARN("MSCCL: something went wrong. Max allowed count is 0\n");
+      return ncclInternalError;
+    }
     info->mscclInfo.mscclMaxAllowedCount = mscclMaxAllowedCount;
     work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
   }
@@ -804,7 +809,6 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
   // In case we have an MSCCL algorithm, there is only one in the queue.
   params->blockDim.x = std::max<unsigned>(params->blockDim.x, info->nThreads);
   if (info->algorithm == NCCL_ALGO_MSCCL){
-    params->gridDim.x = 0;
     struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
     params->gridDim.x = mscclAlgo->nBlocks;
     comm->enqueueInfo->maxChannels = info->nChannels; // params may be varied by a second graph hence we need to capture it here

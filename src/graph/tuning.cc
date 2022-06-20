@@ -124,7 +124,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         if (a == NCCL_ALGO_MSCCL) {
           // MSCCL algorithms have a range for each algorithm and are decided by ncclTopoGetAlgoTime function.
           comm->latencies[coll][a][p] = 0.;
-          comm->bandwidths[coll][a][p] = 0.;
+          comm->bandwidths[coll][a][p] = 1.;
           continue;
         }
 
