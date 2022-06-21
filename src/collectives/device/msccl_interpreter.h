@@ -53,6 +53,7 @@ namespace {
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
     uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
 
+    return;
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int workIndex = ncclShmem.channel.index+1; // +1 because we do not want to start from 0 since all flags are initialized with 0

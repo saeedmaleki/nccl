@@ -201,6 +201,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     goto SkipLoadWork;
 
   while (true) {
+    printf("WTF\n");
     copyToShmem(&ncclShmem.work, &workFifoDev[workFifoIx], tid, nthreads);
     { // Check whether the last operation was aborted and make sure all threads exit
       int aborted = tid == 0 ? *comm->abortFlag : 0;
@@ -225,7 +226,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
-    if (tid == 0) printf("--> bid %d here %d islast %d\n", bid, workFifoIx, (int) ncclShmem.work.header.isLast);
+    printf("--> Algo %d bid %d tid %d here %d islast %d | %d\n", Algo, bid, tid, workFifoIx, (int) ncclShmem.work.header.isLast, (int) (ncclShmem.work.header.funcIndex == FnIndex));
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
