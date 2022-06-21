@@ -140,8 +140,6 @@ struct mscclRegistration {
 struct mscclHostCommInfo {
   int numberOfMSCCLAlgorithms;
   mscclDevCommInfo mscclDevComm;
-  // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
-  int flagsNeedReset;
   size_t scratchBufferSize;
 
   // registered algorithms

@@ -792,13 +792,6 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
     return ncclSuccess;
   }
 
-  // MSCCL flags need to be reset every time we hit the end of the fifo queue
-  if (info->comm->mscclHostComm.flagsNeedReset == 1){
-    printf("Do we ever get here?\n");
-    CUDACHECK(cudaMemsetAsync(info->comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
-    info->comm->mscclHostComm.flagsNeedReset = 0;
-  }
-
   // Compute cuda kernel arg and proxy arg templates
   struct ncclQueueElem* eqElem;
   NCCLCHECK(comm->enqueueInfo->elemList->getNewElem(&eqElem));
@@ -1199,16 +1192,10 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     channel->totalSize += channelSize;
   }
 
-  // TODO: remove flags need reset
-  // printf("FirstOpIndex %d\n", firstOpIndex);
   if (firstOpIndex == NCCL_MAX_OPS-1){
     // MSCCL flags need to be reset every time we hit the end of the fifo queue
-    printf("Do we ever get here?\n");
-    // info->comm->mscclHostComm.flagsNeedReset = 0;
+    CUDACHECK(cudaMemsetAsync(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, comm->myParams->stream));
   }
-  cudaDeviceSynchronize();
-  CUDACHECK(cudaMemset(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
-  cudaDeviceSynchronize();
   comm->collOpCount++;
   return ncclSuccess;
 }

@@ -21,8 +21,6 @@ namespace {
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
     struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
-    __syncthreads();
-    if (tid == 0) printf("0: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
 
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
@@ -41,19 +39,13 @@ namespace {
     }
 
     RedOp redFn(args->redOpArg);
-
-    __syncthreads();
-    if (tid == 0) printf("1: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
     Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
-    __syncthreads();
-    if (tid == 0) printf("2: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
     uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
 
-    return;
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int workIndex = ncclShmem.channel.index+1; // +1 because we do not want to start from 0 since all flags are initialized with 0
@@ -74,8 +66,6 @@ namespace {
       T* srcPointer, * dstPointer;
       int step = 0;
       for (int i = 0; i < mscclTB->nsteps; i++){
-        __syncthreads();
-        if (tid == 0) printf("3: bid %d:%d tid %d:%d step %d:%d workIndex %d\n", bid, (int)gridDim.x, tid, (int)blockDim.x, step, (int)mscclTB->nsteps, workIndex);
         struct mscclTransfer* msccltran = &mscclTB->transfers[i];
         // first wait if there is a dependence
         int16_t dependentPointer = msccltran->depencePointer;
@@ -92,8 +82,6 @@ namespace {
           step += msccltran->numDependences-1;
           __syncthreads();
         }
-        __syncthreads();
-        if (tid == 0) printf("4: bid %d:%d tid %d:%d step %d:%d maxAllowedCnt = %d\n", bid, (int)gridDim.x, tid, (int)blockDim.x, step, (int)mscclTB->nsteps, (int)mscclMaxAllowedCount);
 
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
@@ -134,8 +122,6 @@ namespace {
           else
             return;
         }
-        // __syncthreads();
-        // if (tid == 0) printf("5: bid %d:%d tid %d:%d step %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x, step, (int)mscclTB->nsteps);
         if (msccltran->has_dependence){
           __syncthreads();
           if (tid == nthreads-1){
@@ -144,13 +130,9 @@ namespace {
             mscclFlags[bid].flag = curFlag;
           }
         }
-        // __syncthreads();
-        // if (tid == 0) printf("6: bid %d:%d tid %d:%d step %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x, step, (int)mscclTB->nsteps);
         step++;
       }
 
     }
-    // __syncthreads();
-    // if (tid == 0) printf("last: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
   }
 }

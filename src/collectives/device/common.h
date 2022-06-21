@@ -81,6 +81,14 @@ __device__ int copyToShmem(T *dst, T const *src, int turn=0) {
   return turn;
 }
 
+template<typename T>
+__device__ void simpleCopy(T *dst, T const *src, int tid, int nthreads) {
+  char* d = (char*) dst;
+  char* s = (char*) src;
+  for (int i = tid; i < sizeof(T); i += nthreads)
+    d[i] = s[i];
+}
+
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWorkElement {
   __device__ void run(ncclWorkElem*) {
@@ -165,6 +173,8 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     // causes a global memory load to channelId. This removes the need for a __syncthreads
     channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
+
+    turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // Copy scratch and flag pointers following turn logic
     if (tid == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
@@ -174,12 +184,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
-    char* dst = (char*) &ncclShmem.mscclShmem.mscclTB;
-    char* src = (char*)mscclTB;
-    for (int i = tid; i < sizeof(struct mscclThreadBlock); i+=blockDim.x)
-      dst[i] = src[i];
-    __syncthreads();
-    // turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
@@ -201,7 +205,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     goto SkipLoadWork;
 
   while (true) {
-    printf("WTF\n");
     copyToShmem(&ncclShmem.work, &workFifoDev[workFifoIx], tid, nthreads);
     { // Check whether the last operation was aborted and make sure all threads exit
       int aborted = tid == 0 ? *comm->abortFlag : 0;
@@ -226,12 +229,10 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
-    printf("--> Algo %d bid %d tid %d here %d islast %d | %d\n", Algo, bid, tid, workFifoIx, (int) ncclShmem.work.header.isLast, (int) (ncclShmem.work.header.funcIndex == FnIndex));
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
-    if (tid == 0) printf("===> bid %d here %d islast %d\n", bid, workFifoIx, (int) ncclShmem.work.header.isLast);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }
