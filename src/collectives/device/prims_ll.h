@@ -275,7 +275,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
-
     if (RECV) {
       for (int i=0; i < MaxRecv; i++) incRecv(i);
       postRecv();

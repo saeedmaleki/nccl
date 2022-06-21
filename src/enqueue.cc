@@ -686,7 +686,7 @@ comp_next:
   }
 
   if (info->algorithm == NCCL_ALGO_MSCCL) {
-    int64_t mscclMaxAllowedCount = 0;
+    int16_t mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
       mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
     if (mscclMaxAllowedCount == 0){

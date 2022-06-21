@@ -45,7 +45,7 @@ namespace {
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
-    uint8_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
+    uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
@@ -82,7 +82,6 @@ namespace {
           step += msccltran->numDependences-1;
           __syncthreads();
         }
-
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         prims.setDataPtrs(srcPointer, dstPointer);
