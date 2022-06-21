@@ -1204,11 +1204,11 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   if (firstOpIndex == NCCL_MAX_OPS-1){
     // MSCCL flags need to be reset every time we hit the end of the fifo queue
     printf("Do we ever get here?\n");
-    cudaDeviceSynchronize();
-    CUDACHECK(cudaMemset(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
-    cudaDeviceSynchronize();
     // info->comm->mscclHostComm.flagsNeedReset = 0;
   }
+  cudaDeviceSynchronize();
+  CUDACHECK(cudaMemset(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  cudaDeviceSynchronize();
   comm->collOpCount++;
   return ncclSuccess;
 }

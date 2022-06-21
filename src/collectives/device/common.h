@@ -162,7 +162,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     // get the address without causing a global load
     struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
-    turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // causes a global memory load to channelId. This removes the need for a __syncthreads
     channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
@@ -175,6 +174,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
+    char* dst = (char*) &ncclShmem.mscclShmem.mscclTB;
+    char* src = (char*)mscclTB;
+    for (int i = tid; i < sizeof(struct mscclThreadBlock); i+=blockDim.x)
+      dst[i] = src[i];
+    __syncthreads();
+    // turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
@@ -220,11 +225,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
+    if (tid == 0) printf("--> bid %d here %d islast %d\n", bid, workFifoIx, (int) ncclShmem.work.header.isLast);
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
-
+    if (tid == 0) printf("===> bid %d here %d islast %d\n", bid, workFifoIx, (int) ncclShmem.work.header.isLast);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }

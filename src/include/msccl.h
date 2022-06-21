@@ -114,7 +114,7 @@ struct mscclAlgorithm {
 // Only related MSCCL algorithm elements necessary for a threadblock
 struct mscclSharedMemoryInfo {
   struct mscclThreadBlock mscclTB;
-  struct mscclFlag* flags;
+  volatile struct mscclFlag* flags;
   void* scratchBuffer;
   int nchunksPerLoop;
   int8_t pad[8];

@@ -21,8 +21,8 @@ namespace {
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
     struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
-    // __syncthreads();
-    // if (tid == 0) printf("0: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
+    __syncthreads();
+    if (tid == 0) printf("0: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
 
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
@@ -42,12 +42,12 @@ namespace {
 
     RedOp redFn(args->redOpArg);
 
-    // __syncthreads();
-    // if (tid == 0) printf("1: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
+    __syncthreads();
+    if (tid == 0) printf("1: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
     Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
-    // __syncthreads();
-    // if (tid == 0) printf("2: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
+    __syncthreads();
+    if (tid == 0) printf("2: bid %d:%d tid %d:%d\n", bid, (int)gridDim.x, tid, (int)blockDim.x);
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
@@ -85,7 +85,8 @@ namespace {
             int8_t dependentBid = mscclTB->dependentBid[dependentPointer+index];
             int16_t dependentStep = mscclTB->dependentStep[dependentPointer+index];
             uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-            while ((mscclFlags + dependentBid)->flag < goalFlag){};
+            while ((mscclFlags + dependentBid)->flag < goalFlag){
+            };
           }
           step += msccltran->numDependences-1;
           __syncthreads();
