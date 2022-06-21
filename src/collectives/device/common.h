@@ -162,20 +162,16 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     // get the address without causing a global load
     struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
-    turn = 0;
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
-    __syncthreads();
     // causes a global memory load to channelId. This removes the need for a __syncthreads
     channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
-    turn = 0;
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
     // Copy scratch and flag pointers following turn logic
-    __syncthreads();
     if (tid == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
-    else if (tid == WARP_SIZE)
+    if (tid == 1)
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
-    else if (tid == 2*WARP_SIZE)
+    if (tid == 2)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
