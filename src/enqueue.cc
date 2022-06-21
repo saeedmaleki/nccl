@@ -794,6 +794,7 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
 
   // MSCCL flags need to be reset every time we hit the end of the fifo queue
   if (info->comm->mscclHostComm.flagsNeedReset == 1){
+    printf("Do we ever get here?\n");
     CUDACHECK(cudaMemsetAsync(info->comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
     info->comm->mscclHostComm.flagsNeedReset = 0;
   }
@@ -1163,6 +1164,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   size_t channelSize = elem->count*ncclTypeSize(proxyOp->dtype)/elem->nChannels;
   enum ncclWorkElemType workElemType = proxyOp->redOp == ncclNumOps ? ncclWorkTypeColl : ncclWorkTypeRegColl;  // redOp is only set when using CollNet
 
+  int firstOpIndex = 0;
   for (int bid=0; bid<nChannels; bid++) {
     int channelId = getNextChannel(comm, aggMode);
     struct ncclChannel* channel = comm->channels+channelId;
@@ -1171,6 +1173,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     proxyOp->channelId = channelId;
     proxyOp->opCount = comm->collOpCount;
     if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
+    if (bid == 0) firstOpIndex = (channel->workFifoTail-1+NCCL_MAX_OPS)%NCCL_MAX_OPS;
 
     elem->bid = bid % nChannels;
     struct ncclWork* w = NULL;
@@ -1194,6 +1197,17 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     // store work element into FIFO
     NCCLCHECK(enqueueSegOp(workElemType, work, w, segment, &eqElem->buffRegInfo, channel, comm));
     channel->totalSize += channelSize;
+  }
+
+  // TODO: remove flags need reset
+  // printf("FirstOpIndex %d\n", firstOpIndex);
+  if (firstOpIndex == NCCL_MAX_OPS-1){
+    // MSCCL flags need to be reset every time we hit the end of the fifo queue
+    printf("Do we ever get here?\n");
+    cudaDeviceSynchronize();
+    CUDACHECK(cudaMemset(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+    cudaDeviceSynchronize();
+    // info->comm->mscclHostComm.flagsNeedReset = 0;
   }
   comm->collOpCount++;
   return ncclSuccess;
