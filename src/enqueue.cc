@@ -477,7 +477,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
   }
 
-  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannels;
+  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannelsRingOrTree; // Honor NCCL decision
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET) {
@@ -893,7 +893,7 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
       channelSize = NCCL_AGG_CHANNEL_SIZE * std::min(16, comm->nRanks);
     }
     // Reduce the per-channel size if we cannot fully utilize the channels
-    while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
+    while (comm->asyncTotalSize < channelSize * comm->nChannelsRingOrTree && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     // Check whether the ops have same reduce and data types (and hence can be packed in same ncclWork)
     int channelUsed = 0;
     int homogeneous = 1;
@@ -904,7 +904,7 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
         WARN("MSCCL is not supposed to be used in async mode with more than one collective at a time");
         return ncclInvalidUsage;
       }
-      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
+      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannelsRingOrTree); // assign number of channels
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
       homogeneous &= info->coll == comm->asyncOps[0].coll &&
