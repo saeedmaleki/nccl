@@ -916,17 +916,13 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             sTB->recvpeer = recvpeer;
             sTB->sendpeer = sendpeer;
             if (channelId < 0 || channelId > MAXCHANNELS){
-              if (channelId == -1 && recvpeer == -1 && sendpeer == -1){
-                WARN("MSCCL: threadblock %d on GPU %d has no send or recv", bid, id);
-              } else {
-                WARN("MSCCL for threadblocks with recv/send, chan needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
-                return ncclInvalidUsage;
-              }
+              WARN("MSCCL: threadblock %d on GPU %d has an invalid channel %d", bid, id, channelId);
+              return ncclInvalidUsage;
             }
             sTB->channelId = channelId;
 
             // setting the summary of the msccl aglorithm in msccl channels
-            mscclChannelInfo* mscclChannel = (sTB->channelId == -1) ? NULL : &mscclAlgo->mscclChannels[sTB->channelId];
+            mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[sTB->channelId];
 
             int numDependences = 0;
             int oldDependencePointer = 0; // inidcator of where the dependences started for nop
@@ -1054,20 +1050,12 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
                       WARN("MSCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
                       return ncclInvalidUsage;
                     }
-                    if (mscclChannel == NULL) {
-                      WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                      return ncclInternalError;
-                    }
                     mscclChannel->nchunksForSendPeer[mscclChannel->nsendPeers][count-1]++;
                   }
                   if (hasRecv){
                     if (recvpeer < 0){
                       WARN("MSCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
                       return ncclInvalidUsage;
-                    }
-                    if (mscclChannel == NULL) {
-                      WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                      return ncclInternalError;
                     }
                     mscclChannel->nchunksForRecvPeer[mscclChannel->nrecvPeers][count-1]++;
                   }
@@ -1121,28 +1109,23 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
               }
             }
             if (sTB->sendpeer >= 0){
-              if (mscclChannel == NULL) {
-                WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                return ncclInternalError;
+              if (mscclChannel->nsendPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("MSCCL: too many sends per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                return ncclInvalidUsage;
               }
               mscclChannel->sendPeers[mscclChannel->nsendPeers] = sTB->sendpeer;
               mscclChannel->nsendPeers++;
             }
             if (sTB->recvpeer >= 0){
-              if (mscclChannel == NULL) {
-                WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                return ncclInternalError;
+              if (mscclChannel->nrecvPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("MSCCL: too many recvs per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                return ncclInvalidUsage;
               }
               mscclChannel->recvPeers[mscclChannel->nrecvPeers] = sTB->recvpeer;
               mscclChannel->nrecvPeers++;
             }
-            if (mscclChannel) {
-              mscclChannel->nBlocksForChannel++;
-              if (mscclChannel->nBlocksForChannel > MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-                WARN("MSCCL: too many sends/recv per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
-                return ncclInvalidUsage;
-              }
-            }
+
+            mscclChannel->threadBlockToControlChannel = bid;
           }
         }
         // make sure that threblocks are in order. Something like 0, 2, 3 is not allowed.

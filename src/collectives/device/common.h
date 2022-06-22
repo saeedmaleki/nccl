@@ -163,6 +163,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int tid = threadIdx.x;
   int nthreads = blockDim.x;
   int bid = blockIdx.x;
+  int designatedTB = -1;
 
   int turn = copyToShmem(&ncclShmem.comm, comm);
   ncclChannel *channel;
@@ -171,16 +172,19 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
     // causes a global memory load to channelId. This removes the need for a __syncthreads
-    channel = &((ncclDevCommAndChannels*)comm)->channels[mscclTB->channelId];
+    int channelId = mscclTB->channelId;
+    channel = &((ncclDevCommAndChannels*)comm)->channels[channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // Copy scratch and flag pointers following turn logic
     if (tid == 0)
-      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
+      designatedTB = mscclAlgo->mscclChannels[channelId].threadBlockToControlChannel;
     if (tid == 1)
-      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
+      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
     if (tid == 2)
+      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
+    if (tid == 3)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
@@ -216,9 +220,9 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
 
   SkipLoadWork:
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
-    // With MSCCL, multiple threadblocks tries to write the same value. This is safe
-    // because MSCCL only runs one algorithm in a ncclKernel.
-    if (tid == 0)
+    // With MSCCL, only the designated threadblock should assign channel->index
+    // otherwise, there is a data race on it
+    if (tid == 0 && ((Algo != NCCL_ALGO_MSCCL) || (designatedTB == bid)))
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
     __syncwarp();
