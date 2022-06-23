@@ -445,13 +445,19 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     info->protocol = NCCL_PROTO_SIMPLE;
   }
   else {
+    if (comm->asyncOpCount > 1 && info->algorithm == NCCL_ALGO_MSCCL){
+      WARN("MSCCL algorithms is not supposed to be used in async mode!");
+      return ncclInvalidUsage;
+    }
     // if it is already decided that this is a MSCCL algorithm, then skip this part
     if (info->algorithm != NCCL_ALGO_MSCCL){
       float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
       // Find algorithm / protocol.
       info->algorithm = -1;
       info->protocol = -1;
-      NCCLCHECK(ncclTopoGetMSCCLAlgo(info));
+      // Do not run any MSCCL algo in async mode
+      if (comm->asyncOpCount <= 1)
+        NCCLCHECK(ncclTopoGetMSCCLAlgo(info));
       if (info->algorithm != NCCL_ALGO_MSCCL){
         int nAlgos = NCCL_NUM_ALGORITHMS;
         for (int a=0; a<nAlgos; a++) {
@@ -900,10 +906,6 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     int allCollNetSupport = comm->collNetSupport;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      if (info->algorithm == NCCL_ALGO_MSCCL){
-        WARN("MSCCL is not supposed to be used in async mode with more than one collective at a time");
-        return ncclInvalidUsage;
-      }
       info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannelsRingOrTree); // assign number of channels
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
