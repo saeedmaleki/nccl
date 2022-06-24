@@ -7,6 +7,7 @@
 #define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 #define MSCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
 #define MSCCL_MAX_NUM_ALGOS 4
+#define MSCCL_MAX_COUNT 72 // make sure this does not overflow wrt the size of mscclWorkElem::mscclMaxAllowCount
 
 #define MSCCL_SLICESTEPS (NCCL_STEPS/4)
 #define MSCCL_CHUNKSTEPS (NCCL_STEPS/2)
@@ -28,10 +29,16 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
 
-struct mscclWorkElemOrInfo {
-  uint16_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
+struct mscclWorkElem {
+  uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
-  int8_t inPlace;
+  // this fits perfectly in workElem wrt size and 48 bits is plenty enough to not overflow. 
+  // 2^48 * 10 us (minimum of a collective) ~ 89 years!
+  uint16_t workIndex[3];
+};
+
+struct mscclWorkInfo {
+  int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
 };
 
 // TODO: compress this by a lot!
@@ -61,8 +68,6 @@ struct mscclThreadBlock {
   struct mscclTransfer transfers[MSCCL_MAX_NUM_STEPS];
   int64_t pad;
 };
-
-#define MSCCL_MAX_COUNT 72
 
 struct mscclChannelInfo {
   int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
@@ -117,7 +122,7 @@ struct mscclSharedMemoryInfo {
   volatile struct mscclFlag* flags;
   void* scratchBuffer;
   int nchunksPerLoop;
-  int8_t pad[8];
+  uint64_t workIndex;
 };
 
 // All MSCCL algorithm info that will be in ncclDevComm
@@ -147,6 +152,7 @@ struct mscclHostCommInfo {
   int nMscclRegistrations;
 
   int inMSCCLConnectionSetupPhase;
+  uint64_t workIndex;
 };
 
 // Stride copy for 2D alltoall

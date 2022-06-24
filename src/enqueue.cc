@@ -235,8 +235,21 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       // As we inline the first coll directly, we can free it immediately.
       // Except P2P or aggregation or registration cases
       struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
-      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1)
+      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1){
         work->header.type = ncclWorkTypeUnused;
+        if (mscclAlgo) {
+          uint64_t curWorkIndex = comm->mscclHostComm.workIndex++;
+          uint16_t* mappingto48bit = work->elems->mscclWork.workIndex;
+          mappingto48bit[0] = (curWorkIndex & 0xFFFF);
+          mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
+          mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
+          printf("do we get here! %lld\n", curWorkIndex);
+          if (curWorkIndex & 0xFFFF000000000000) {
+            WARN("MSCCL workIndex is not supposed to overflow!");
+            return ncclInternalError;
+          }
+        }
+      }
     }
     
     if (channel->gdrMemDesc) {
@@ -614,7 +627,7 @@ comp_next:
   work->header.nWarps = info->nThreads / WARP_SIZE;
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
-  work->mscclWork = info->mscclInfo;
+  work->mscclWork.mscclAlgoIndex = info->mscclInfo.mscclAlgoIndex;
 
   if (info->comm->nRanks == 1) {
     // one-rank reduce index
@@ -692,14 +705,16 @@ comp_next:
   }
 
   if (info->algorithm == NCCL_ALGO_MSCCL) {
-    int16_t mscclMaxAllowedCount = 0;
+    int mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
       mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
     if (mscclMaxAllowedCount == 0){
       WARN("MSCCL: something went wrong. Max allowed count is 0\n");
       return ncclInternalError;
     }
-    info->mscclInfo.mscclMaxAllowedCount = mscclMaxAllowedCount;
+    if (mscclMaxAllowedCount >= MSCCL_MAX_COUNT)
+      mscclMaxAllowedCount = MSCCL_MAX_COUNT-1;
+
     work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
   }
 
@@ -1159,7 +1174,6 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   size_t channelSize = elem->count*ncclTypeSize(proxyOp->dtype)/elem->nChannels;
   enum ncclWorkElemType workElemType = proxyOp->redOp == ncclNumOps ? ncclWorkTypeColl : ncclWorkTypeRegColl;  // redOp is only set when using CollNet
 
-  int firstOpIndex = 0;
   for (int bid=0; bid<nChannels; bid++) {
     int channelId = getNextChannel(comm, aggMode);
     struct ncclChannel* channel = comm->channels+channelId;
@@ -1168,7 +1182,6 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     proxyOp->channelId = channelId;
     proxyOp->opCount = comm->collOpCount;
     if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
-    if (bid == 0) firstOpIndex = (channel->workFifoTail-1+NCCL_MAX_OPS)%NCCL_MAX_OPS;
 
     elem->bid = bid % nChannels;
     struct ncclWork* w = NULL;
@@ -1194,10 +1207,6 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     channel->totalSize += channelSize;
   }
 
-  if (firstOpIndex == NCCL_MAX_OPS-1){
-    // MSCCL flags need to be reset every time we hit the end of the fifo queue
-    CUDACHECK(cudaMemsetAsync(comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, comm->myParams->stream));
-  }
   comm->collOpCount++;
   return ncclSuccess;
 }

@@ -48,7 +48,7 @@ namespace {
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
-    const int workIndex = ncclShmem.channel.index+1; // +1 because we do not want to start from 0 since all flags are initialized with 0
+    const int64_t workIndex = ncclShmem.mscclShmem.workIndex;
     volatile struct mscclFlag* mscclFlags = ncclShmem.mscclShmem.flags;
 
     for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
@@ -127,6 +127,7 @@ namespace {
           if (tid == nthreads-1){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
+            printf("bid %d workIndex %d flag %lld\n", (int)bid, (int)workIndex, mscclFlags[bid].flag);
             mscclFlags[bid].flag = curFlag;
           }
         }

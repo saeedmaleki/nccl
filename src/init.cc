@@ -298,6 +298,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   // Allocating and copying MSCCL elements
   NCCLCHECK(ncclCudaCalloc(&comm->mscclHostComm.mscclDevComm.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  comm->mscclHostComm.workIndex = 1; // start workIndex from 1 since flags are initialized to 0
   NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.mscclInfo, &comm->mscclHostComm.mscclDevComm, 1));
 
   // Duplicate the dev comm on the device
@@ -809,7 +810,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
 
     // connect MSCCL connections
-    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for avoiding shared buffer for net.cc
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for shared buffer for net.cc
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections

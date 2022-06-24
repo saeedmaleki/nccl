@@ -196,8 +196,7 @@ struct ncclWorkElem {
   uint8_t nChannels;
   uint64_t redOpArg;
 
-  struct mscclWorkElemOrInfo mscclWork;
-  uint8_t pad[4];
+  struct mscclWorkElem mscclWork;
 };
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
 

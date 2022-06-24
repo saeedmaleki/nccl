@@ -130,8 +130,8 @@ struct ncclShmemData {
   uint64_t redOpArgs[NCCL_MAX_DIRECT_ARITY+1];
   struct ncclDevComm comm;
   struct ncclChannel channel;
-  struct mscclSharedMemoryInfo mscclShmem;
   struct ncclWork work;
+  struct mscclSharedMemoryInfo mscclShmem;
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "shmem.work needs to be 16B aligned");
 
@@ -178,7 +178,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
 
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // Copy scratch and flag pointers following turn logic
-    if (tid == 0)
+    if (tid == 0) // make sure tid 0 loads designatedTB since it will used later to advance the channel.index
       designatedTB = mscclAlgo->mscclChannels[channelId].threadBlockToControlChannel;
     if (tid == 1)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
@@ -186,6 +186,13 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
     if (tid == 3)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
+    if (tid == 4){
+      ncclChannel *channel0;
+      channel0 = ((ncclDevCommAndChannels*)comm)->channels;
+      uint16_t* mappedWorkIndex = channel0->workFifo[channel0->index].elems->mscclWork.workIndex;
+      ncclShmem.mscclShmem.workIndex = ((uint64_t)mappedWorkIndex[0]) | ((uint64_t)mappedWorkIndex[1] << 16) | ((uint64_t)mappedWorkIndex[1] << 32);
+    }
+    
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
   } else {
@@ -233,10 +240,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
+    if (tid == 0) printf("entering %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
+    if (tid == 0) printf("exiting %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }

@@ -365,7 +365,7 @@ static ncclResult_t SaveProxy(struct ncclChannel* channel, int type, int peer, s
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElemOrInfo* mscclInfo) {
+ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElem* mscclInfo) {
   struct ncclChannel* channel = comm->channels+op->channelId;
   int pattern = op->pattern;
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {

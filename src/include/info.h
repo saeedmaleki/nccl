@@ -54,7 +54,7 @@ struct ncclInfo {
   int chunkSize;
   int channelId;
 
-  struct mscclWorkElemOrInfo mscclInfo;
+  struct mscclWorkInfo mscclInfo;
 };
 
 #endif
