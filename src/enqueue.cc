@@ -237,18 +237,18 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
       if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1){
         work->header.type = ncclWorkTypeUnused;
-        if (mscclAlgo) {
-          uint64_t curWorkIndex = comm->mscclHostComm.workIndex++;
-          uint16_t* mappingto48bit = work->elems->mscclWork.workIndex;
-          mappingto48bit[0] = (curWorkIndex & 0xFFFF);
-          mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
-          mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
-          printf("do we get here! %lld\n", curWorkIndex);
-          if (curWorkIndex & 0xFFFF000000000000) {
-            WARN("MSCCL workIndex is not supposed to overflow!");
-            return ncclInternalError;
-          }
-        }
+        // if (mscclAlgo) {
+        //   uint64_t curWorkIndex = comm->mscclHostComm.workIndex++;
+        //   uint16_t* mappingto48bit = work->elems->mscclWork.workIndex;
+        //   mappingto48bit[0] = (curWorkIndex & 0xFFFF);
+        //   mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
+        //   mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
+        //   printf("do we get here! %lld\n", curWorkIndex);
+        //   if (curWorkIndex & 0xFFFF000000000000) {
+        //     WARN("MSCCL workIndex is not supposed to overflow!");
+        //     return ncclInternalError;
+        //   }
+        // }
       }
     }
     
@@ -716,6 +716,17 @@ comp_next:
       mscclMaxAllowedCount = MSCCL_MAX_COUNT-1;
 
     work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
+
+    // set workIndex in here which will be inlined later
+    uint64_t curWorkIndex = info->comm->mscclHostComm.workIndex++;
+    uint16_t* mappingto48bit = work->mscclWork.workIndex;
+    mappingto48bit[0] = (curWorkIndex & 0xFFFF);
+    mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
+    mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
+    if (curWorkIndex & 0xFFFF000000000000) {
+      WARN("MSCCL workIndex is not supposed to overflow!");
+      return ncclInternalError;
+    }
   }
 
 

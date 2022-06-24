@@ -187,9 +187,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     if (tid == 3)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     if (tid == 4){
-      ncclChannel *channel0;
-      channel0 = ((ncclDevCommAndChannels*)comm)->channels;
-      uint16_t* mappedWorkIndex = channel0->workFifo[channel0->index].elems->mscclWork.workIndex;
+      uint16_t* mappedWorkIndex = first.mscclWork.workIndex;
       ncclShmem.mscclShmem.workIndex = ((uint64_t)mappedWorkIndex[0]) | ((uint64_t)mappedWorkIndex[1] << 16) | ((uint64_t)mappedWorkIndex[1] << 32);
     }
     
@@ -240,12 +238,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
-    if (tid == 0) printf("entering %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
+    // if (tid == 0) printf("entering %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
-    if (tid == 0) printf("exiting %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
+    // if (tid == 0) printf("exiting %d %d index %lld\n", (int)Algo, (int) bid, ncclShmem.mscclShmem.workIndex);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }

@@ -127,7 +127,7 @@ namespace {
           if (tid == nthreads-1){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
-            printf("bid %d workIndex %d flag %lld\n", (int)bid, (int)workIndex, mscclFlags[bid].flag);
+            // printf("bid %d workIndex %d flag %lld\n", (int)bid, (int)workIndex, mscclFlags[bid].flag);
             mscclFlags[bid].flag = curFlag;
           }
         }
