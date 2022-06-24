@@ -32,9 +32,7 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 struct mscclWorkElem {
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
-  // this fits perfectly in workElem wrt size and 48 bits is plenty enough to not overflow. 
-  // 2^48 * 10 us (minimum of a collective) ~ 89 years!
-  uint16_t workIndex[3];
+  uint32_t workIndex;
 };
 
 struct mscclWorkInfo {
@@ -122,7 +120,7 @@ struct mscclSharedMemoryInfo {
   volatile struct mscclFlag* flags;
   void* scratchBuffer;
   int nchunksPerLoop;
-  uint64_t workIndex;
+  uint32_t workIndex;
 };
 
 // All MSCCL algorithm info that will be in ncclDevComm
@@ -152,7 +150,8 @@ struct mscclHostCommInfo {
   int nMscclRegistrations;
 
   int inMSCCLConnectionSetupPhase;
-  uint64_t workIndex;
+  uint32_t workIndex;
+  int flagsNeedReset;
 };
 
 // Stride copy for 2D alltoall

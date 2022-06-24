@@ -704,6 +704,7 @@ comp_next:
     return ncclInternalError;
   }
 
+  // printf("algo = %d\n", info->algorithm);
   if (info->algorithm == NCCL_ALGO_MSCCL) {
     int mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
@@ -718,14 +719,13 @@ comp_next:
     work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
 
     // set workIndex in here which will be inlined later
-    uint64_t curWorkIndex = info->comm->mscclHostComm.workIndex++;
-    uint16_t* mappingto48bit = work->mscclWork.workIndex;
-    mappingto48bit[0] = (curWorkIndex & 0xFFFF);
-    mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
-    mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
-    if (curWorkIndex & 0xFFFF000000000000) {
-      WARN("MSCCL workIndex is not supposed to overflow!");
-      return ncclInternalError;
+    work->mscclWork.workIndex = info->comm->mscclHostComm.workIndex++;
+    // make sure we reset the msccl flags when when we are almost overflowing the type of workIndex
+    if ((info->comm->mscclHostComm.flagsNeedReset) || (info->comm->mscclHostComm.workIndex > (((uint64_t)1 << (8*sizeof(info->comm->mscclHostComm.workIndex))) - 2*NCCL_MAX_OPS-1))) {
+      TRACE(NCCL_COLL,"MSCCL: resetting the semaphores");
+      CUDACHECK(cudaMemsetAsync(info->comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+      info->comm->mscclHostComm.workIndex = 1; // setting the workIndex back to 1 for next iterations
+      info->comm->mscclHostComm.flagsNeedReset = 0;
     }
   }
 
@@ -1319,6 +1319,8 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, cudaGraph_t* graph) {
       // the first setup node in the new graph will not have a dependency
       comm->lastCudaGraphId = cudaGraphId;
       comm->lastSetupNode = NULL;
+      // MSCCL needs a flag reset if it is a new graph and there is an MSCCL collective in the graph
+      comm->mscclHostComm.flagsNeedReset = 1;
     }
     if (comm->launchMode == ncclComm::GROUP) comm->launchMode = ncclComm::GROUP_GRAPH;
     comm->usingCudaGraph = 1;
