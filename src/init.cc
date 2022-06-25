@@ -812,7 +812,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
     // connect MSCCL connections
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for shared buffer for net.cc
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
   }
