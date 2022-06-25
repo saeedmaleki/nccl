@@ -390,6 +390,7 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
     struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclInfo->mscclAlgoIndex];
     int mscclMaxAllowedCount = mscclInfo->mscclMaxAllowedCount;
     mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[op->channelId];
+    int nloopsChunkSteps = op->nsteps;
     // nsteps is adjusted here for MSCCL algo
     for (int i=0; i<mscclChannel->nrecvPeers; i++){
       int nrecvs = 0;
@@ -397,7 +398,7 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
         int ntransfersPerOp = DIVUP(j+1,mscclMaxAllowedCount);
         nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
       }
-      op->nsteps *= nrecvs;
+      op->nsteps = nloopsChunkSteps*nrecvs;
       NCCLCHECK(SaveProxy(channel, proxyRecv, mscclChannel->recvPeers[i], op, 0));
     }
     for (int i=0; i<mscclChannel->nsendPeers; i++){
@@ -407,9 +408,10 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
         nsends += mscclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
       }
 
-      op->nsteps *= nsends;
+      op->nsteps = nloopsChunkSteps*nsends;
       NCCLCHECK(SaveProxy(channel, proxySend, mscclChannel->sendPeers[i], op, 0));
     }
+    op->nsteps = nloopsChunkSteps;
   }
 
   if (pattern == ncclPatternCollTreeUpDown) {
