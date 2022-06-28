@@ -1135,8 +1135,6 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
               mscclChannel->recvPeers[mscclChannel->nrecvPeers] = sTB->recvpeer;
               mscclChannel->nrecvPeers++;
             }
-
-            mscclChannel->threadBlockToControlChannel = bid;
           }
         }
         // make sure that threblocks are in order. Something like 0, 2, 3 is not allowed.

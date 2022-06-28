@@ -399,6 +399,7 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
         nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
       }
       op->nsteps = nloopsChunkSteps*nrecvs;
+      // printf("recv channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->recvPeers[i]);
       NCCLCHECK(SaveProxy(channel, proxyRecv, mscclChannel->recvPeers[i], op, 0));
     }
     for (int i=0; i<mscclChannel->nsendPeers; i++){
@@ -409,6 +410,7 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
       }
 
       op->nsteps = nloopsChunkSteps*nsends;
+      // printf("send channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->sendPeers[i]);
       NCCLCHECK(SaveProxy(channel, proxySend, mscclChannel->sendPeers[i], op, 0));
     }
     op->nsteps = nloopsChunkSteps;

@@ -364,7 +364,7 @@ static ncclResult_t ncclLaunchProxy(struct ncclQueueInfo* eqInfo) {
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
   ncclComm_t comm = eqInfo->comm;
-  if (eqInfo->maxChannels == 0) return ncclSuccess;
+  if (eqInfo->maxChannels == 0 && eqInfo->elemList->begin()->work.elems->mscclWork.mscclAlgoIndex == -1) return ncclSuccess;
 
   for (int r=0; r<eqInfo->maxChannels; r++) {
     struct ncclChannel* channel = comm->channels+r;
@@ -512,12 +512,12 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
         else break;
       }
     }
-    if (info->protocol == NCCL_PROTO_SIMPLE) {
-      nt += WARP_SIZE; // Extra warp for sync
-      // More threads or sync warps needed due to split thread model
-      if (info->algorithm == NCCL_ALGO_TREE) nt += 3*WARP_SIZE;
-      if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
-    }
+  }
+  if (info->protocol == NCCL_PROTO_SIMPLE) {
+    nt += WARP_SIZE; // Extra warp for sync
+    // More threads or sync warps needed due to split thread model
+    if (info->algorithm == NCCL_ALGO_TREE) nt += 3*WARP_SIZE;
+    if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
   }
   info->nChannels = nc;
   info->nThreads = nt;

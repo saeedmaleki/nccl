@@ -65,7 +65,6 @@ namespace {
       T* srcPointer, * dstPointer;
       int step = 0;
       for (int i = 0; i < mscclTB->nsteps; i++){
-        // if (tid == 0) printf("1: bid %d step %d workIndex %d tile %d\n", bid, step, (int)workIndex, (int)iter);
         struct mscclTransfer* msccltran = &mscclTB->transfers[i];
         // first wait if there is a dependence
         int16_t dependentPointer = msccltran->depencePointer;
@@ -87,6 +86,7 @@ namespace {
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         prims.setDataPtrs(srcPointer, dstPointer);
         int count = msccltran->count;
+        // if (tid == 0) printf("1: bid %d step %d workIndex %d tile %d maxCount %d nthreads %d\n", bid, step, (int)workIndex, (int)iter, mscclMaxAllowedCount, nthreads);
         for (int c = 0; c < count; c += mscclMaxAllowedCount) {
           srcoffset = gridOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
           dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;

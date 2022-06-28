@@ -163,7 +163,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int tid = threadIdx.x;
   int nthreads = blockDim.x;
   int bid = blockIdx.x;
-  int designatedTB = -1;
 
   int turn = copyToShmem(&ncclShmem.comm, comm);
   ncclChannel *channel;
@@ -177,16 +176,13 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
-    // Copy scratch and flag pointers following turn logic
-    if (tid == 0) // make sure tid 0 loads designatedTB since it will used later to advance the channel.index
-      designatedTB = mscclAlgo->mscclChannels[channelId].threadBlockToControlChannel;
-    if (tid == 1)
+    if (tid == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
-    if (tid == 2)
+    if (tid == 1)
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
-    if (tid == 3)
+    if (tid == 2)
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
-    if (tid == 4){
+    if (tid == 3){
       ncclShmem.mscclShmem.workIndex = first.mscclWork.workIndex;
     }
     

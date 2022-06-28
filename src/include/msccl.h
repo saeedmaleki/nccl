@@ -75,7 +75,6 @@ struct mscclChannelInfo {
   int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nchunksForRecvPeer[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][MSCCL_MAX_COUNT];
   int nrecvPeers;
-  int threadBlockToControlChannel; // TODO: to be removed this designated threadblock just advances channel.index
 };
 
 struct mscclFlag {
