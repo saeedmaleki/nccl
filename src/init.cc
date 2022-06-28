@@ -805,7 +805,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
         for (int c=0; c<mscclAlgo->nChannels; c++) {
           struct ncclChannel* channel = comm->channels+c;
           struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
-          NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nrecvPeers, mscclChannel->recvPeers, mscclChannel->nsendPeers, mscclChannel->sendPeers, 0), ret, affinity_restore);
+
+          int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nSendPeers; p++)
+            sendPeers[p] = mscclChannel->sendPeerInfo[p].peer;
+
+          int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++)
+            recvPeers[p] = mscclChannel->recvPeerInfo[p].peer;
+
+          NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nRecvPeers, recvPeers, mscclChannel->nSendPeers, sendPeers, 0), ret, affinity_restore);
         }
       }
     }

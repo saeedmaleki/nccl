@@ -698,6 +698,11 @@ comp_next:
     return ncclInternalError;
   }
 
+  if (info->protocol == NCCL_PROTO_SIMPLE && (chunkSize % ((info->nThreads-WARP_SIZE)*sizeof(uint64_t)/ncclTypeSize(info->datatype))) != 0){
+    WARN("chunkSize (%d) should be divisble by (nthreads-WARP_SIZE) (%d) for Simple protocol", chunkSize, info->nThreads-WARP_SIZE);
+    return ncclInternalError;
+  }
+
   if (info->algorithm == NCCL_ALGO_MSCCL) {
     int mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
@@ -1179,9 +1184,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
     proxyOp->opCount = comm->collOpCount;
     for (int ch = 0; ch < mscclAlgo->nChannels; ch++){
-      struct ncclChannel* channel = comm->channels+ch;
       proxyOp->channelId = ch;
-      // TODO: Optimize this function by a lot
       if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
     }
     comm->collOpCount++;

@@ -29,6 +29,7 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
 
+static_assert(UINT8_MAX > MSCCL_MAX_COUNT, "mscclMaxAllowedCount datatype must be smaller than the allowed datatype");
 struct mscclWorkElem {
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
@@ -67,14 +68,19 @@ struct mscclThreadBlock {
   int64_t pad;
 };
 
+struct mscclChannelPeerInfo {
+  // nchunksForPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
+  int peer;
+  int nchunksForPeer[MSCCL_MAX_COUNT];
+  int nCountExists;
+  int counts[MSCCL_MAX_COUNT];
+};
+
 struct mscclChannelInfo {
-  int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
-  int nchunksForSendPeer[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][MSCCL_MAX_COUNT];
-  int nsendPeers;
-  int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForRecvPeer[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][MSCCL_MAX_COUNT];
-  int nrecvPeers;
+  struct mscclChannelPeerInfo sendPeerInfo[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nSendPeers;
+  struct mscclChannelPeerInfo recvPeerInfo[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nRecvPeers;
 };
 
 struct mscclFlag {

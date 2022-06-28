@@ -392,26 +392,31 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
     mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[op->channelId];
     int nloopsChunkSteps = op->nsteps;
     // nsteps is adjusted here for MSCCL algo
-    for (int i=0; i<mscclChannel->nrecvPeers; i++){
+    for (int i=0; i<mscclChannel->nRecvPeers; i++){
+      struct mscclChannelPeerInfo* recvPeer = &mscclChannel->recvPeerInfo[i];
       int nrecvs = 0;
-      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,mscclMaxAllowedCount);
-        nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
+      for (int j = 0; j < recvPeer->nCountExists; j++){
+        int c = recvPeer->counts[j];
+        int ntransfersPerOp = DIVUP(c+1,mscclMaxAllowedCount);
+        nrecvs += recvPeer->nchunksForPeer[c] * ntransfersPerOp;
       }
+
       op->nsteps = nloopsChunkSteps*nrecvs;
       // printf("recv channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->recvPeers[i]);
-      NCCLCHECK(SaveProxy(channel, proxyRecv, mscclChannel->recvPeers[i], op, 0));
+      NCCLCHECK(SaveProxy(channel, proxyRecv, recvPeer->peer, op, 0));
     }
-    for (int i=0; i<mscclChannel->nsendPeers; i++){
+    for (int i=0; i<mscclChannel->nSendPeers; i++){
+      struct mscclChannelPeerInfo* sendPeer = &mscclChannel->sendPeerInfo[i];
       int nsends = 0;
-      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,mscclMaxAllowedCount);
-        nsends += mscclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
+      for (int j = 0; j < sendPeer->nCountExists; j++){
+        int c = sendPeer->counts[j];
+        int ntransfersPerOp = DIVUP(c+1,mscclMaxAllowedCount);
+        nsends += sendPeer->nchunksForPeer[c] * ntransfersPerOp;
       }
 
       op->nsteps = nloopsChunkSteps*nsends;
       // printf("send channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->sendPeers[i]);
-      NCCLCHECK(SaveProxy(channel, proxySend, mscclChannel->sendPeers[i], op, 0));
+      NCCLCHECK(SaveProxy(channel, proxySend, sendPeer->peer, op, 0));
     }
     op->nsteps = nloopsChunkSteps;
   }

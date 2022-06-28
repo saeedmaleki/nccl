@@ -1061,14 +1061,27 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
                       WARN("MSCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
                       return ncclInvalidUsage;
                     }
-                    mscclChannel->nchunksForSendPeer[mscclChannel->nsendPeers][count-1]++;
+                    if (mscclChannel->nSendPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                      WARN("MSCCL: too many sends per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                      return ncclInvalidUsage;
+                    }
+
+                    struct mscclChannelPeerInfo* sendPeerInfo = &mscclChannel->sendPeerInfo[mscclChannel->nSendPeers];
+                    sendPeerInfo->nchunksForPeer[count-1]++;
+                    // mscclChannel->nchunksForSendPeer[mscclChannel->nsendPeers][count-1]++;
                   }
                   if (hasRecv){
                     if (recvpeer < 0){
                       WARN("MSCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
                       return ncclInvalidUsage;
                     }
-                    mscclChannel->nchunksForRecvPeer[mscclChannel->nrecvPeers][count-1]++;
+                    if (mscclChannel->nRecvPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                      WARN("MSCCL: too many recvs per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                      return ncclInvalidUsage;
+                    }
+                    struct mscclChannelPeerInfo* recvPeerInfo = &mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers];
+                    recvPeerInfo->nchunksForPeer[count-1]++;
+                    // mscclChannel->nchunksForRecvPeer[mscclChannel->nrecvPeers][count-1]++;
                   }
 
                   if (checkSrc) NCCLCHECK(mscclCheckBufferBounds(msccltran->srcbuffer, msccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
@@ -1119,21 +1132,29 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
                 }
               }
             }
-            if (sTB->sendpeer >= 0){
-              if (mscclChannel->nsendPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-                WARN("MSCCL: too many sends per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
-                return ncclInvalidUsage;
+
+            // finish up mscclChannel calculation
+
+            for (int c = 0; c < MSCCL_MAX_COUNT; c++){
+              struct mscclChannelPeerInfo* sendPeer = &mscclChannel->sendPeerInfo[mscclChannel->nSendPeers];
+              if (sendPeer->nchunksForPeer[c] > 0){
+                sendPeer->counts[sendPeer->nCountExists] = c;
+                sendPeer->nCountExists++;
               }
-              mscclChannel->sendPeers[mscclChannel->nsendPeers] = sTB->sendpeer;
-              mscclChannel->nsendPeers++;
+              struct mscclChannelPeerInfo* recvPeer = &mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers];
+              if (recvPeer->nchunksForPeer[c] > 0){
+                recvPeer->counts[recvPeer->nCountExists] = c;
+                recvPeer->nCountExists++;
+              }
+            }
+
+            if (sTB->sendpeer >= 0){
+              mscclChannel->sendPeerInfo[mscclChannel->nSendPeers].peer = sTB->sendpeer;
+              mscclChannel->nSendPeers++;
             }
             if (sTB->recvpeer >= 0){
-              if (mscclChannel->nrecvPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-                WARN("MSCCL: too many recvs per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
-                return ncclInvalidUsage;
-              }
-              mscclChannel->recvPeers[mscclChannel->nrecvPeers] = sTB->recvpeer;
-              mscclChannel->nrecvPeers++;
+              mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers].peer = sTB->recvpeer;
+              mscclChannel->nRecvPeers++;
             }
           }
         }
