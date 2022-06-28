@@ -103,6 +103,7 @@ struct RunWork {
   __device__ __forceinline__ void run(ncclWork *w) {
     int wid = threadIdx.x / WARP_SIZE;
     int inc = w->header.type == ncclWorkTypeRegColl ? sizeof(ncclWorkElemReg) / sizeof(ncclWorkElem) : 1;
+    if (threadIdx.x == 0) printf("bid %d Algo %d in runWork\n", (int) blockIdx.x, Algo);
     #pragma unroll 1
     for(int e=0; e < NCCL_MAX_WORK_ELEMENTS && w->elems[e].header.type != ncclWorkTypeUnused; e += inc) {
       if (wid < w->header.nWarps)
@@ -226,7 +227,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
     // With MSCCL, only the designated threadblock should assign channel->index
     // otherwise, there is a data race on it
-    if (tid == 0 && ((Algo != NCCL_ALGO_MSCCL) || (designatedTB == bid)))
+    if (tid == 0 && (Algo != NCCL_ALGO_MSCCL))
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
     __syncwarp();
@@ -237,12 +238,12 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     }
     __syncthreads();
 
-    // if (tid == 0) printf("entering %d %d index %d\n", (int)Algo, (int) bid, (int)ncclShmem.mscclShmem.workIndex);
+    if (tid == 0) printf("entering %d %d index %d channel->index %d ncclShmem.work.header.funcIndex %d %d\n", (int)Algo, (int) bid, (int)ncclShmem.mscclShmem.workIndex, (int) channel->index, (int) ncclShmem.work.header.funcIndex, (int) FnIndex);
     if (ncclShmem.work.header.funcIndex == FnIndex)
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     else
       ncclFuncs[ncclShmem.work.header.funcIndex]();
-    // if (tid == 0) printf("exiting %d %d index %d\n", (int)Algo, (int) bid, (int)ncclShmem.mscclShmem.workIndex);
+    if (tid == 0) printf("exiting %d %d index %d channel->index %d ncclShmem.work.header.isLast %d\n", (int)Algo, (int) bid, (int)ncclShmem.mscclShmem.workIndex, (int) channel->index, (int) ncclShmem.work.header.isLast);
     if (ncclShmem.work.header.isLast) break;
     __syncthreads();
   }

@@ -50,7 +50,7 @@ namespace {
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int64_t workIndex = ncclShmem.mscclShmem.workIndex;
     volatile struct mscclFlag* mscclFlags = ncclShmem.mscclShmem.flags;
-
+    if (tid == 0) printf("bid %d entering\n", bid);
     for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
       ssize_t realChunkSize;
       if (Proto::Id == NCCL_PROTO_SIMPLE) {
@@ -66,6 +66,7 @@ namespace {
       T* srcPointer, * dstPointer;
       int step = 0;
       for (int i = 0; i < mscclTB->nsteps; i++){
+        if (tid == 0) printf("bid %d step %d\n", bid, step);
         struct mscclTransfer* msccltran = &mscclTB->transfers[i];
         // first wait if there is a dependence
         int16_t dependentPointer = msccltran->depencePointer;
@@ -133,7 +134,7 @@ namespace {
         }
         step++;
       }
-
     }
+    if (tid == 0) printf("bid %d exiting\n", bid);
   }
 }

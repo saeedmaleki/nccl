@@ -209,7 +209,7 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
     if (mscclAlgo){
       // If we are using msccl, we need to set number of blocks and channels differently
       params->gridDim.x = mscclAlgo->nBlocks;
-      eqInfo->maxChannels = mscclAlgo->nChannels;
+      eqInfo->maxChannels = 0;
     } else {
       int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
       for (int c=0; c<nChannels; c++) {
@@ -231,27 +231,14 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
     }
     channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].header.isLast = 1;
 
-    if (c == 0 || mscclAlgo) {
+    if (c == 0) {
       // As we inline the first coll directly, we can free it immediately.
       // Except P2P or aggregation or registration cases
       struct ncclWork* work = channel->workFifo+((channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS);
-      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1){
+      if (work->header.type == ncclWorkTypeColl && eqInfo->elemList->count() == 1)
         work->header.type = ncclWorkTypeUnused;
-        // if (mscclAlgo) {
-        //   uint64_t curWorkIndex = comm->mscclHostComm.workIndex++;
-        //   uint16_t* mappingto48bit = work->elems->mscclWork.workIndex;
-        //   mappingto48bit[0] = (curWorkIndex & 0xFFFF);
-        //   mappingto48bit[1] = (curWorkIndex & 0xFFFF0000);
-        //   mappingto48bit[2] = (curWorkIndex & 0xFFFF00000000);
-        //   printf("do we get here! %lld\n", curWorkIndex);
-        //   if (curWorkIndex & 0xFFFF000000000000) {
-        //     WARN("MSCCL workIndex is not supposed to overflow!");
-        //     return ncclInternalError;
-        //   }
-        // }
-      }
     }
-    
+
     if (channel->gdrMemDesc) {
       // GDRCOPY support
       uint64_t first = (channel->workFifoTail-channel->workCount)%NCCL_MAX_OPS;
@@ -498,33 +485,40 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
 
   int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannelsRingOrTree; // Honor NCCL decision
   int nt = comm->maxThreads[info->algorithm][info->protocol];
-  int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
-  if (info->algorithm == NCCL_ALGO_COLLNET) {
-    // CollNet channel tuning
-    int ncSwitch = 16;
-    bool flag = true;
-    while (ncSwitch >= 1 && flag) {
-      while ((flag = info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold) && nc > ncSwitch) {
-        if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
-        nc--;
-      }
-      ncSwitch /= 2;
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    nc = 0; // set nchannels for MSCCL to 0 since we will use first inlined work for work
+    int mscclAlgoNthreads = comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nThreads;
+    if (mscclAlgoNthreads > 0){
+      nt = std::min(nt, mscclAlgoNthreads);
     }
   } else {
-    // Ring/Tree channel tuning
-    while (info->nBytes < nc*nt*threadThreshold) {
-      if (nc >= 2) nc--;
-      else if ((nt % 128) == 0) nt/=2;
-      else break;
+    int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
+    if (info->algorithm == NCCL_ALGO_COLLNET) {
+      // CollNet channel tuning
+      int ncSwitch = 16;
+      bool flag = true;
+      while (ncSwitch >= 1 && flag) {
+        while ((flag = info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold) && nc > ncSwitch) {
+          if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
+          nc--;
+        }
+        ncSwitch /= 2;
+      }
+    } else {
+      // Ring/Tree channel tuning
+      while (info->nBytes < nc*nt*threadThreshold) {
+        if (nc >= 2) nc--;
+        else if ((nt % 128) == 0) nt/=2;
+        else break;
+      }
+    }
+    if (info->protocol == NCCL_PROTO_SIMPLE) {
+      nt += WARP_SIZE; // Extra warp for sync
+      // More threads or sync warps needed due to split thread model
+      if (info->algorithm == NCCL_ALGO_TREE) nt += 3*WARP_SIZE;
+      if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
     }
   }
-  if (info->protocol == NCCL_PROTO_SIMPLE) {
-    nt += WARP_SIZE; // Extra warp for sync
-    // More threads or sync warps needed due to split thread model
-    if (info->algorithm == NCCL_ALGO_TREE) nt += 3*WARP_SIZE;
-    if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
-  }
-  if (info->algorithm == NCCL_ALGO_MSCCL) nc = comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nChannels;
   info->nChannels = nc;
   info->nThreads = nt;
   return ncclSuccess;
@@ -661,7 +655,7 @@ comp_next:
     work->lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
     // Set direct direction for broadcast-gather (read or write)
     work->direct = (info->nBytes / info->nChannels <= 1024*1024) ? NCCL_DIRECT_WRITE : NCCL_DIRECT_READ;
-  } else if (info->protocol == NCCL_PROTO_LL) {
+  } else if (info->algorithm != NCCL_ALGO_MSCCL &&info->protocol == NCCL_PROTO_LL) {
     const ssize_t sliceSize = stepSize*sizeof(uint64_t)/sizeof(union ncclLLFifoLine);
     const ssize_t loopSize = info->nChannels*info->nchunksPerLoop*(ssize_t)sliceSize;
     work->lastChunkSize = DIVUP((info->nBytes-(info->nBytes/loopSize)*loopSize), info->nChannels*info->nchunksPerLoop);
@@ -704,7 +698,6 @@ comp_next:
     return ncclInternalError;
   }
 
-  // printf("algo = %d\n", info->algorithm);
   if (info->algorithm == NCCL_ALGO_MSCCL) {
     int mscclMaxAllowedCount = 0;
     if (info->nBytes > 0)
@@ -837,7 +830,7 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
   if (info->algorithm == NCCL_ALGO_MSCCL){
     struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
     params->gridDim.x = mscclAlgo->nBlocks;
-    comm->enqueueInfo->maxChannels = info->nChannels; // params may be varied by a second graph hence we need to capture it here
+    comm->enqueueInfo->maxChannels = 0; // nchannels with MSCCL is set to 0 since first is always inlined and MSCCL can be used only that way
   } else {
     params->gridDim.x += info->nChannels;
     params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
@@ -1180,6 +1173,20 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   struct ncclWork* work = &eqElem->work;
   struct ncclWorkElem* elem = work->elems;
   struct ncclProxyOp* proxyOp = &eqElem->proxyOp;
+  int mscclAlgoIndex = elem->mscclWork.mscclAlgoIndex;
+  if (mscclAlgoIndex >= 0){
+    // short circuit and only save proxy
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+    proxyOp->opCount = comm->collOpCount;
+    for (int ch = 0; ch < mscclAlgo->nChannels; ch++){
+      struct ncclChannel* channel = comm->channels+ch;
+      proxyOp->channelId = ch;
+      // TODO: Optimize this function by a lot
+      if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
+    }
+    comm->collOpCount++;
+    return ncclSuccess;
+  }
 
   int nChannels = elem->nChannels;
   size_t channelSize = elem->count*ncclTypeSize(proxyOp->dtype)/elem->nChannels;

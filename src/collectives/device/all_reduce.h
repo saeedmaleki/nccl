@@ -30,7 +30,7 @@ namespace {
       // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
-
+    if (tid == 0) printf("bid %d is in ring\n", bid);
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg);
 

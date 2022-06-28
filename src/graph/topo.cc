@@ -848,6 +848,17 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
   } else {
     mscclAlgo->inPlace = 0;
   }
+  int nThreads, hasnthreads;
+  nThreads = 0; // default value
+  NCCLCHECK(xmlAttrExists(topNode, "nthreads", &hasnthreads));
+  if (hasnthreads){
+    NCCLCHECK(xmlGetAttrInt(topNode, "nthreads", &nThreads));
+    if ((nThreads % WARP_SIZE) != 0){
+      WARN("MSCCL nthreads must be a multiplication of %d", WARP_SIZE);
+      return ncclInvalidUsage;
+    }
+  }
+  mscclAlgo->nThreads = nThreads;
 
   if (globalNChannels > maxNChannels){
     WARN("MSCCL: number of desired channels (%d) is more than possible ones (%d)", globalNChannels, maxNChannels);
