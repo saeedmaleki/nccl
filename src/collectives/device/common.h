@@ -161,6 +161,8 @@ extern __shared__ ncclShmemData ncclShmem;
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex>
 __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int tid = threadIdx.x;
+  int wid = threadIdx.x/WARP_SIZE;
+  int nWarps = blockDim.x/WARP_SIZE;
   int nthreads = blockDim.x;
   int bid = blockIdx.x;
 
@@ -176,13 +178,13 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
     turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
-    if (tid == 0)
+    if (wid == 0)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
-    if (tid == 1)
+    if (wid == (1 % nWarps))
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
-    if (tid == 2)
+    if (wid == (2 % nWarps))
       ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
-    if (tid == 3){
+    if (wid == (3 % nWarps)){
       ncclShmem.mscclShmem.workIndex = first.mscclWork.workIndex;
     }
     

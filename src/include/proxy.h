@@ -12,6 +12,8 @@
 #include "socket.h"
 #include <pthread.h>
 
+enum { proxyRecv=0, proxySend=1 };
+
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
 
 struct ncclProxyArgs;
@@ -187,6 +189,7 @@ enum proxyMode {
   proxyTo = 2
 };
 
+ncclResult_t ConnectionNeedsProxy(struct ncclChannel* channel, int type, int peer, int connIndex, int* needsProxy);
 ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElem* mscclInfo);
 ncclResult_t ncclProxyComputeP2p(struct ncclInfo* info, struct ncclProxyOp* proxyOp);
 ncclResult_t ncclProxySaveP2p(struct ncclComm* comm, struct ncclProxyOp* proxyOp);

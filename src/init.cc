@@ -824,6 +824,36 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+
+    // now figure out if proxies are needed
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        mscclAlgo->needsProxy = 0;
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+
+          for (int p = 0; p < mscclChannel->nSendPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxySend, mscclChannel->sendPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxyRecv, mscclChannel->recvPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   // Check if we can setup CollNet

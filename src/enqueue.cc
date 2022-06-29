@@ -1185,7 +1185,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     proxyOp->opCount = comm->collOpCount;
     for (int ch = 0; ch < mscclAlgo->nChannels; ch++){
       proxyOp->channelId = ch;
-      if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
+      if (proxyOp->nsteps && mscclAlgo->needsProxy) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
     }
     comm->collOpCount++;
     return ncclSuccess;
@@ -1507,11 +1507,14 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     NCCLCHECKGOTO(ncclSetupCollKernel(info), ret, end);
 
     // Host setup
-    if (comm->usingCudaGraph) {
-      NCCLCHECKGOTO(ncclCudaGraphHostSetup(comm, graph), ret, end);
-    } else {
-      ncclEnqueueHostSetup<0>(comm->enqueueInfo);
-      NCCLCHECKGOTO(comm->enqueueInfo->ret, ret, end);
+    // If the algo is MSCCL and we didn't need any proxy thread, we can short circuit this
+    if (info->algorithm != NCCL_ALGO_MSCCL || comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].needsProxy){
+      if (comm->usingCudaGraph) {
+        NCCLCHECKGOTO(ncclCudaGraphHostSetup(comm, graph), ret, end);
+      } else {
+        ncclEnqueueHostSetup<0>(comm->enqueueInfo);
+        NCCLCHECKGOTO(comm->enqueueInfo->ret, ret, end);
+      }
     }
 
     // Common part between graph mode and non-graph mode

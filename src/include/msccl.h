@@ -119,6 +119,7 @@ struct mscclAlgorithm {
   struct mscclChannelInfo mscclChannels[MAXCHANNELS];
   // number of scratch chunks that MSCCL will use
   int nScratchChunks;
+  int needsProxy;
 };
 
 // Only related MSCCL algorithm elements necessary for a threadblock

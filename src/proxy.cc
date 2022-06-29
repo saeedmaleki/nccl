@@ -13,8 +13,6 @@
 #define ENABLE_TIMER 0
 #include "timer.h"
 
-enum { proxyRecv=0, proxySend=1 };
-
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
 
@@ -362,6 +360,22 @@ static ncclResult_t SaveProxy(struct ncclChannel* channel, int type, int peer, s
   if (connector->transportComm->proxyProgress == NULL) return ncclSuccess;
 
   NCCLCHECK(ncclLocalOpAppend(connector->comm, &connector->proxyConn, op));
+  return ncclSuccess;
+}
+
+ncclResult_t ConnectionNeedsProxy(struct ncclChannel* channel, int type, int peer, int connIndex, int* needsProxy) {
+  *needsProxy = 0;
+  if (peer < 0) return ncclSuccess;
+
+  struct ncclPeer* peerComm = channel->peers+peer;
+  struct ncclConnector* connector = type == proxyRecv ? peerComm->recv+connIndex : peerComm->send+connIndex;
+  if (connector->transportComm == NULL) {
+    WARN("Rank %d has no transport for %s peer %d on channel %d/%d", connector->comm->rank,
+        type == proxyRecv ? "recv" : "send", peer, channel->id, connIndex);
+    return ncclInternalError;
+  }
+  if (connector->transportComm->proxyProgress == NULL) return ncclSuccess;
+  *needsProxy = 1;
   return ncclSuccess;
 }
 
