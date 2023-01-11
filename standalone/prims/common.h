@@ -20,7 +20,6 @@
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
 typedef void(*ncclKern_t)();
-extern __device__ ncclKern_t ncclFuncs[];
 
 struct ncclShmemGroup {
   ncclConnInfo *recvConns[NCCL_MAX_DIRECT_ARITY];
@@ -188,7 +187,6 @@ __device__ void ncclKernel(
     if (ncclShmem.work.header.funcIndex == FnIndex) {
       RunWork<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
     } else {
-      ncclFuncs[ncclShmem.work.header.funcIndex]();
     }
 
     int workIxNext = ncclShmem.work.header.workNext;
