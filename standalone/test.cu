@@ -24,8 +24,7 @@ __global__ void test(float *input, float *output, int size)
 
 __global__ void test_send(float *data_src, int size)
 {
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
-                              ALLREDUCE_SLICESTEPS>;
+    using Proto = ProtoLL;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {1, -1};
@@ -37,8 +36,7 @@ __global__ void test_send(float *data_src, int size)
 
 __global__ void test_recv(float *data_dst, int size)
 {
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
-                              ALLREDUCE_SLICESTEPS>;
+    using Proto = ProtoLL;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {0, -1};
@@ -69,6 +67,9 @@ int sendrecv_test()
     test_send<<<1, 1>>>(data_src, size);
     CUDACHECK(cudaSetDevice(1));
     test_recv<<<1, 1>>>(data_dst, size);
+    CUDACHECK(cudaSetDevice(0));
+    CUDACHECK(cudaDeviceSynchronize());
+    CUDACHECK(cudaSetDevice(1));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
     CUDACHECK(cudaMemcpy(h_data_dst, data_dst, size * sizeof(float),
@@ -83,4 +84,8 @@ int sendrecv_test()
     return 0;
 }
 
-int main() { sendrecv_test(); }
+int main()
+{
+    setbuf(stdout, NULL);
+    sendrecv_test();
+}
