@@ -26,6 +26,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   uint64_t recvConnHead;
 
   struct ncclConnInfo* sendConn = NULL;
+  // sendConnFifoPtr is only used for CPU-proxy
   volatile int* sendConnFifoPtr = NULL;
   volatile uint64_t* sendConnHeadPtr = NULL;
   uint64_t sendConnHead;

@@ -22,7 +22,8 @@ __global__ void test(float *input, float *output, int size)
     return;
 }
 
-__global__ void test_send(float *data_src, int size)
+__global__ void test_send(float *data_src, void *recvbuff,
+                          uint64_t *sendConnHead, int size)
 {
     using Proto = ProtoLL;
     int tid = threadIdx.x;
@@ -38,7 +39,8 @@ __global__ void test_send(float *data_src, int size)
     return;
 }
 
-__global__ void test_recv(float *data_dst, int size)
+__global__ void test_recv(float *data_dst, void *recvbuff,
+                          uint64_t *sendConnHead, int size)
 {
     using Proto = ProtoLL;
     int tid = threadIdx.x;
@@ -54,11 +56,20 @@ __global__ void test_recv(float *data_dst, int size)
     return;
 }
 
+// test GPU 0 send to GPU 1
 int sendrecv_test()
 {
     int size = 1024;
+    // There are four buffers that needs to be allocated in LL protocol. The
+    // data_src is the data source buffer, located on sender GPU. The data_dst
+    // is the data destination buffer, located on receiver GPU.
     float *data_src, *data_dst;
-    void *sendbuff, *recvbuff;
+    // The recvbuff is the buffer used to receive data from sender GPU, it is
+    // located on receiver GPU. The sendConnHead is the buffer used to sync the
+    // sender and receiver GPU to avoid data corruption. It is located on sender
+    // GPU.
+    void *recvbuff;
+    uint64_t *sendConnHead;
     // enable peer access
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceEnablePeerAccess(1, 0));
@@ -67,8 +78,11 @@ int sendrecv_test()
 
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaMalloc(&data_src, size * sizeof(float)));
+    CUDACHECK(cudaMalloc(&sendConnHead, sizeof(uint64_t)));
     CUDACHECK(cudaSetDevice(1));
     CUDACHECK(cudaMalloc(&data_dst, size * sizeof(float)));
+    // currently I set recvbuff to two times of size of data to avoid error
+    CUDACHECK(cudaMalloc(&recvbuff, 2 * size * sizeof(float)));
     float *h_data_src = (float *)malloc(size * sizeof(float));
     float *h_data_dst = (float *)malloc(size * sizeof(float));
     for (int i = 0; i < size; i++) {
@@ -79,9 +93,9 @@ int sendrecv_test()
     CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
     CUDACHECK(cudaSetDevice(0));
-    test_send<<<1, 1>>>(data_src, size);
+    test_send<<<1, 1>>>(data_src, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(1));
-    test_recv<<<1, 1>>>(data_dst, size);
+    test_recv<<<1, 1>>>(data_dst, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
