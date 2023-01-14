@@ -1,4 +1,4 @@
-CC = nvcc
+NVCC = nvcc
 
 CFLAGS = 
 
@@ -17,10 +17,10 @@ all: $(EXE)
 
 $(OBJECTS): $(SOURCES)
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(INCLUDE) -c $< -o $@
+	$(NVCC) $(CFLAGS) $(INCLUDE) -c $< -o $@
 
 $(EXE): $(OBJECTS)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(NVCC) $(CFLAGS) $^ -o $@
 
 # Clean up
 clean:
