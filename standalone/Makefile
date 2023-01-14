@@ -11,8 +11,7 @@ BUILDDIR = build
 
 OBJECTS = $(BUILDDIR)/$(SOURCES:.cu=.o)
 
-
-EXE = $(BUILDDIR)/test
+EXE = $(BUILDDIR)/$(SOURCES:.cu=)
 
 all: $(EXE)
 

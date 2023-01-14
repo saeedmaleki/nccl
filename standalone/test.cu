@@ -29,8 +29,12 @@ __global__ void test_send(float *data_src, int size)
     int nthreads = blockDim.x;
     int sendPeers[2] = {1, -1};
     int recvPeers[2] = {0, -1};
+    ncclDevChannelPeer peerInfo;
+
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, sendPeers, recvPeers, data_src, NULL, ncclDevSum);
+        tid, nthreads, sendPeers, recvPeers, data_src, NULL, &peerInfo,
+        ncclDevSum);
+    prims.send(0, size);
     return;
 }
 
@@ -41,8 +45,12 @@ __global__ void test_recv(float *data_dst, int size)
     int nthreads = blockDim.x;
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {1, -1};
+    ncclDevChannelPeer peerInfo;
+
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, sendPeers, recvPeers, NULL, data_dst, ncclDevSum);
+        tid, nthreads, sendPeers, recvPeers, NULL, data_dst, &peerInfo,
+        ncclDevSum);
+    prims.recv(0, size);
     return;
 }
 
@@ -50,6 +58,13 @@ int sendrecv_test()
 {
     int size = 1024;
     float *data_src, *data_dst;
+    void *sendbuff, *recvbuff;
+    // enable peer access
+    CUDACHECK(cudaSetDevice(0));
+    CUDACHECK(cudaDeviceEnablePeerAccess(1, 0));
+    CUDACHECK(cudaSetDevice(1));
+    CUDACHECK(cudaDeviceEnablePeerAccess(0, 0));
+
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaMalloc(&data_src, size * sizeof(float)));
     CUDACHECK(cudaSetDevice(1));

@@ -348,8 +348,8 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
 
   __device__ Primitives(const int tid, const int nthreads, int const *recvPeers,
                         int const *sendPeers, void const *inputBuf,
-                        void *outputBuf, uint64_t redOpArg,
-                        ncclDevChannelPeer *channel_peer, int group = 0)
+                        void *outputBuf, ncclDevChannelPeer *channel_peer,
+                        uint64_t redOpArg, int group = 0)
       : redOp(redOpArg), tid(tid), nthreads(nthreads), wid(tid % WARP_SIZE),
         group(group & (uint16_t)0xFFFF), stepLines(4096)
   {
@@ -377,8 +377,8 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
     printf("4");
     this->fan = Fan(nrecv, nsend);
-    // loadRecvSync();
-    // loadSendSync();
+    loadRecvSync();
+    loadSendSync();
     printf("5");
     setDataPtrs(inputBuf, outputBuf);
   }
