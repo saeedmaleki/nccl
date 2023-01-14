@@ -379,8 +379,8 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
     // printf("4");
     this->fan = Fan(nrecv, nsend);
-    // loadRecvSync();
-    // loadSendSync();
+    loadRecvSync();
+    loadSendSync();
     // printf("5");
     setDataPtrs(inputBuf, outputBuf);
   }
