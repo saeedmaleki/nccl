@@ -31,14 +31,16 @@ __global__ void test_send(float *data_src, char *recvbuff,
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {0, -1};
     ncclDevChannelPeer peerInfo;
+    peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
     peerInfo.send[0].head = sendConnHead;
-    peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    peerInfo.recv[0].head = sendConnHead;
-    peerInfo.recv[0].step = 0;
+    peerInfo.send[0].step = 0;
+    // peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
+    // peerInfo.recv[0].head = sendConnHead;
+    // peerInfo.recv[0].step = 0;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
-    // prims.send(0, size);
+    prims.send(0, size);
     return;
 }
 
@@ -54,10 +56,13 @@ __global__ void test_recv(float *data_dst, char *recvbuff,
     peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
     peerInfo.send[0].head = sendConnHead;
     peerInfo.send[0].step = 0;
+    peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
+    peerInfo.recv[0].head = sendConnHead;
+    peerInfo.recv[0].step = 0;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
-    // prims.recv(0, size);
+    prims.recv(0, size);
     return;
 }
 
@@ -115,6 +120,7 @@ int sendrecv_test()
             return -1;
         }
     }
+    printf("Success\n");
     return 0;
 }
 
