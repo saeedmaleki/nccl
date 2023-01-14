@@ -35,7 +35,7 @@ __global__ void test_send(float *data_src, char *recvbuff,
     peerInfo.recv[0].head = sendConnHead;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, data_src, NULL, &peerInfo,
-        ncclDevSum);
+        ncclDevSum, 0);
     // prims.send(0, size);
     return;
 }
@@ -53,7 +53,7 @@ __global__ void test_recv(float *data_dst, char *recvbuff,
     peerInfo.send[0].head = sendConnHead;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, NULL, data_dst, &peerInfo,
-        ncclDevSum);
+        ncclDevSum, 0);
     // prims.recv(0, size);
     return;
 }
@@ -95,9 +95,9 @@ int sendrecv_test()
     CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
     CUDACHECK(cudaSetDevice(0));
-    test_send<<<1, 1>>>(data_src, recvbuff, sendConnHead, size);
+    test_send<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(1));
-    test_recv<<<1, 1>>>(data_dst, recvbuff, sendConnHead, size);
+    test_recv<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
