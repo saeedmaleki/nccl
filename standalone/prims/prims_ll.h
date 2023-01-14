@@ -354,9 +354,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
         group(group & (uint16_t)0xFFFF), stepLines(4096)
   {
     // according to my test, the stepLines seems to be always 4096
-    // the nccShmem is previously initialized in ncclKernel, but configuring
-    // ncclShmem manually is quite sofiisticated, so I just hard code it here
-    // stepLines=(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine));
     int connIndex = group >> 16;
     // auto *channel = &ncclShmem.channel;
     // If we are going to support oneshot collNet + LL, then we would need to
