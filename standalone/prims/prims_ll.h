@@ -26,7 +26,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   uint64_t recvConnHead;
 
   struct ncclConnInfo* sendConn = NULL;
-  // sendConnFifoPtr is only used for CPU-proxy
   volatile int* sendConnFifoPtr = NULL;
   volatile uint64_t* sendConnHeadPtr = NULL;
   uint64_t sendConnHead;
@@ -359,38 +358,32 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     // ncclShmem manually is quite sofiisticated, so I just hard code it here
     // stepLines=(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine));
     int connIndex = group >> 16;
-    //     printf("1 %d,", connIndex);
-
     // auto *channel = &ncclShmem.channel;
     // If we are going to support oneshot collNet + LL, then we would need to
     // add connector index here
     int nrecv = 0, nsend = 0;
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at
     // least 1
-    // printf("2");
     while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
       loadRecvConn(&channel_peer[recvPeers[nrecv]].recv[connIndex], nrecv);
       nrecv++;
     }
-    // printf("3");
     while (nsend < MaxSend && sendPeers[nsend] >= 0) {
       loadSendConn(&channel_peer[sendPeers[nsend]].send[connIndex], nsend);
       nsend++;
     }
-    // printf("4");
     this->fan = Fan(nrecv, nsend);
     loadRecvSync();
     loadSendSync();
-    // printf("5");
     setDataPtrs(inputBuf, outputBuf);
   }
 
   __device__ ~Primitives() {
-    // // Save steps for the next operation
-    // if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
-    //   recvConn->step = recvConnHead;
-    // if (tid < fan.nsend())
-    //   sendConn->step = sendConnHead;
+    // Save steps for the next operation
+    if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
+      recvConn->step = recvConnHead;
+    if (tid < fan.nsend())
+      sendConn->step = sendConnHead;
     // Ensure all steps written back
     barrier();
   }
