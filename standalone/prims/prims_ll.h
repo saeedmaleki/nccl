@@ -358,8 +358,9 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     // the nccShmem is previously initialized in ncclKernel, but configuring
     // ncclShmem manually is quite sofiisticated, so I just hard code it here
     // stepLines=(ncclShmem.comm.buffSizes[NCCL_PROTO_LL]/NCCL_STEPS/sizeof(ncclLLFifoLine));
-    printf("1 %d,", sizeof(ncclLLFifoLine));
     int connIndex = group >> 16;
+        printf("1 %d,", connIndex);
+
     // auto *channel = &ncclShmem.channel;
     // If we are going to support oneshot collNet + LL, then we would need to
     // add connector index here
