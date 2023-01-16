@@ -346,6 +346,35 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     setDataPtrs(inputBuf, outputBuf);
   }
 
+  __device__ Primitives(const int tid, const int nthreads, int const *recvPeers,
+                        int const *sendPeers, void const *inputBuf,
+                        void *outputBuf, struct ncclDevChannelPeer *channel_peer,
+                        uint64_t redOpArg, int group)
+      : redOp(redOpArg), tid(tid), nthreads(nthreads), wid(tid % WARP_SIZE),
+        group(group & (uint16_t)0xFFFF), stepLines(4096)
+  {
+    // according to my test, the stepLines seems to be always 4096
+    int connIndex = group >> 16;
+    // auto *channel = &ncclShmem.channel;
+    // If we are going to support oneshot collNet + LL, then we would need to
+    // add connector index here
+    int nrecv = 0, nsend = 0;
+    // We compare with Fan::MaxRecv here because this->MaxRecv is always at
+    // least 1
+    while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
+      loadRecvConn(&channel_peer[recvPeers[nrecv]].recv[connIndex], nrecv);
+      nrecv++;
+    }
+    while (nsend < MaxSend && sendPeers[nsend] >= 0) {
+      loadSendConn(&channel_peer[sendPeers[nsend]].send[connIndex], nsend);
+      nsend++;
+    }
+    this->fan = Fan(nrecv, nsend);
+    loadRecvSync();
+    loadSendSync();
+    setDataPtrs(inputBuf, outputBuf);
+  }
+
   __device__ ~Primitives() {
     // Save steps for the next operation
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())
