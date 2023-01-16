@@ -43,7 +43,7 @@ struct ncclShmemData {
 };
 static_assert(offsetof(struct ncclShmemData, work)%16 == 0, "shmem.work needs to be 16B aligned");
 
-__shared__ ncclShmemData ncclShmem;
+extern __shared__ ncclShmemData ncclShmem;
 
 __device__ inline bool barrierReduceAny(int bit) {
   uint32_t popc;
