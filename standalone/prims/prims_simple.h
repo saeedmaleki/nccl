@@ -440,6 +440,53 @@ class Primitives<
     setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkElemReg*)e);
   }
 
+  __device__ Primitives(
+      int tid, int nthreads, int const *recvPeers, int const *sendPeers,
+      void const *inputBuf, void *outputBuf, uint64_t redOpArg,struct ncclDevChannelPeer *channel_peer, uint32_t group=0, struct ncclWorkElem* e = nullptr
+    ):
+    tid(tid),
+    stepSize(65536) {
+    // according to my test, the stepSize is 65536 in default
+    // For send operations, we need an extra warp to overlap the threadfence and the copy
+    this->nthreads = nthreads;
+    this->nworkers = nthreads - (MaxSend > 0 && nthreads-WARP_SIZE >= 64 ? WARP_SIZE : 0);
+    this->group = group & (uint16_t)0xFFFF;
+    int connIndex = group >> 16;
+
+    int nrecv=0, nsend=0;
+    while (nrecv < MaxRecv && recvPeers[nrecv] != -1) nrecv++;
+    while (nsend < MaxSend && sendPeers[nsend] != -1) nsend++;
+    this->fan = Fan(nrecv, nsend);
+
+    constexpr int ThreadPerSync = 8;
+    static_assert(MaxSend < ThreadPerSync && MaxRecv < ThreadPerSync, "Not enough threads to cover all peers");
+
+    int g = tid / ThreadPerSync;
+    int ng = nthreads / ThreadPerSync;
+    index = tid % ThreadPerSync;
+    flags = 0;
+    if (g == 0) {
+      if (index < nrecv) flags |= RoleWaitRecv;
+      if (index == nrecv) flags |= RoleInput;
+    } else if (g == 1) {
+      if (index < nsend) flags |= RoleWaitSend;
+      if (index == nsend) flags |= RoleOutput;
+    } else if (g == ng - 2) {
+      if (index < nrecv) flags |= RolePostRecv;
+    } else if (g == ng - 1) {
+      if (index < nsend) flags |= RolePostSend;
+    }
+
+    int peer = 0;
+    if (flags & (RoleWaitRecv|RolePostRecv)) peer = recvPeers[index];
+    if (flags & (RoleWaitSend|RolePostSend)) peer = sendPeers[index];
+
+    loadRecvConn(&channel_peer[peer], connIndex, e);
+    loadSendConn(&channel_peer[peer], connIndex, e);
+
+    setDataPtrs(inputBuf, outputBuf, redOpArg, (struct ncclWorkElemReg*)e);
+  }
+
   __device__ ~Primitives() {
     // Ensure ncclShmem.groups[].send/recvConns are available
     if (!(flags & ThreadsSynced))
