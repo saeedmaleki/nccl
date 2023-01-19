@@ -11,8 +11,8 @@
         }                                                                      \
     } while (0)
 
-__global__ void test_send_simple(float *data_src, char *recvbuff,
-                                 uint64_t *sendConnHead, int size)
+__global__ void test_send_simple(float *data_src, char *buff, uint64_t *head,
+                                 uint64_t *tail, int size)
 {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
                               ALLREDUCE_SLICESTEPS>;
@@ -21,21 +21,23 @@ __global__ void test_send_simple(float *data_src, char *recvbuff,
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {0, -1};
     ncclDevChannelPeer peerInfo;
-    peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    peerInfo.send[0].head = sendConnHead;
+    peerInfo.send[0].buffs[NCCL_PROTO_SIMPLE] = buff;
+    peerInfo.send[0].head = head;
+    peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
-    // peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    // peerInfo.recv[0].head = sendConnHead;
-    // peerInfo.recv[0].step = 0;
+    peerInfo.recv[0].buffs[NCCL_PROTO_SIMPLE] = buff;
+    peerInfo.recv[0].head = head;
+    peerInfo.recv[0].tail = tail;
+    peerInfo.recv[0].step = 0;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
-    prims.send(0, size);
+    // prims.send(0, size);
     return;
 }
 
-__global__ void test_recv_simple(float *data_dst, char *recvbuff,
-                                 uint64_t *sendConnHead, int size)
+__global__ void test_recv_simple(float *data_dst, char *buff, uint64_t *head,
+                                 uint64_t *tail, int size)
 {
     using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
                               ALLREDUCE_SLICESTEPS>;
@@ -44,16 +46,18 @@ __global__ void test_recv_simple(float *data_dst, char *recvbuff,
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {0, -1};
     ncclDevChannelPeer peerInfo;
-    // peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    peerInfo.send[0].head = sendConnHead;
+    peerInfo.send[0].buffs[NCCL_PROTO_LL] = buff;
+    peerInfo.send[0].head = head;
+    peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
-    peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    // peerInfo.recv[0].head = sendConnHead;
+    peerInfo.recv[0].buffs[NCCL_PROTO_LL] = buff;
+    peerInfo.recv[0].head = head;
+    peerInfo.recv[0].tail = tail;
     peerInfo.recv[0].step = 0;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, sendPeers, recvPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
-    prims.recv(0, size);
+    // prims.recv(0, size);
     return;
 }
 
@@ -61,29 +65,28 @@ __global__ void test_recv_simple(float *data_dst, char *recvbuff,
 int sendrecv_test_simple()
 {
     int size = 1024;
-    // There are four buffers that needs to be allocated in LL protocol. The
+    // There are five buffers that needs to be allocated in Simple protocol. The
     // data_src is the data source buffer, located on sender GPU. The data_dst
     // is the data destination buffer, located on receiver GPU.
     float *data_src, *data_dst;
-    // The recvbuff is the buffer used to receive data from sender GPU, it is
-    // located on receiver GPU. The sendConnHead is the buffer used to sync the
-    // sender and receiver GPU to avoid data corruption. It is located on sender
-    // GPU.
-    char *recvbuff;
-    uint64_t *sendConnHead;
+    char *buffs;    // Local for recv, remote for send
+    uint64_t *tail; // Local for recv, remote for send
+    uint64_t *head; // Local for send, remote for recv
     // enable peer access
-    // CUDACHECK(cudaSetDevice(0));
-    // CUDACHECK(cudaDeviceEnablePeerAccess(1, 0));
-    // CUDACHECK(cudaSetDevice(1));
-    // CUDACHECK(cudaDeviceEnablePeerAccess(0, 0));
+    CUDACHECK(cudaSetDevice(0));
+    CUDACHECK(cudaDeviceEnablePeerAccess(1, 0));
+    CUDACHECK(cudaSetDevice(1));
+    CUDACHECK(cudaDeviceEnablePeerAccess(0, 0));
 
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaMalloc(&data_src, size * sizeof(float)));
-    CUDACHECK(cudaMalloc(&sendConnHead, sizeof(uint64_t)));
+    CUDACHECK(cudaMalloc(&head, sizeof(uint64_t)));
+
     CUDACHECK(cudaSetDevice(1));
     CUDACHECK(cudaMalloc(&data_dst, size * sizeof(float)));
-    // currently I set recvbuff to two times of size of data to avoid error
-    CUDACHECK(cudaMalloc(&recvbuff, 2 * size * sizeof(float)));
+    CUDACHECK(cudaMalloc(&buffs, size * sizeof(float)));
+    CUDACHECK(cudaMalloc(&tail, sizeof(uint64_t)));
+
     float *h_data_src = (float *)malloc(size * sizeof(float));
     float *h_data_dst = (float *)malloc(size * sizeof(float));
     for (int i = 0; i < size; i++) {
@@ -94,9 +97,9 @@ int sendrecv_test_simple()
     CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
     CUDACHECK(cudaSetDevice(0));
-    test_send_simple<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
+    test_send_simple<<<1, 32>>>(data_src, buffs, head, tail, size);
     CUDACHECK(cudaSetDevice(1));
-    test_recv_simple<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
+    test_recv_simple<<<1, 32>>>(data_dst, buffs, head, tail, size);
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
