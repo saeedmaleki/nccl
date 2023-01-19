@@ -14,7 +14,8 @@
 __global__ void test_send_simple(float *data_src, char *recvbuff,
                                  uint64_t *sendConnHead, int size)
 {
-    using Proto = ProtoLL;
+    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
+                              ALLREDUCE_SLICESTEPS>;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {0, -1};
@@ -36,7 +37,8 @@ __global__ void test_send_simple(float *data_src, char *recvbuff,
 __global__ void test_recv_simple(float *data_dst, char *recvbuff,
                                  uint64_t *sendConnHead, int size)
 {
-    using Proto = ProtoLL;
+    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
+                              ALLREDUCE_SLICESTEPS>;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {0, -1};
