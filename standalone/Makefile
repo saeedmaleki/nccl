@@ -10,11 +10,7 @@ endif
 INCLUDE = -I include -I prims
 
 # Source files
-ifeq ($(MPI), 1)
 SOURCES := test_mpi.cu test_single.cu
-else
-SOURCES := test_single.cu
-endif
 
 
 BUILDDIR = build
@@ -24,7 +20,7 @@ OBJECTS = $(SOURCES:%.cu=$(BUILDDIR)/%.o)
 EXE = $(BUILDDIR)/$(SOURCES:.cu=_perf)
 
 
-all: $(OBJECTS)
+all: $(EXE)
 
 $(BUILDDIR)/%.o: %.cu
 	mkdir -p $(BUILDDIR)

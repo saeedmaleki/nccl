@@ -29,8 +29,8 @@ __global__ void test_send(float *data_src, char *recvbuff,
     using Proto = ProtoLL;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
-    int sendPeers[2] = {0, -1};
-    int recvPeers[2] = {0, -1};
+    int recvPeers = -1;
+    int sendPeers = 1;
     ncclDevChannelPeer peerInfo;
     peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
     peerInfo.send[0].head = sendConnHead;
@@ -38,11 +38,10 @@ __global__ void test_send(float *data_src, char *recvbuff,
     // peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
     // peerInfo.recv[0].head = sendConnHead;
     // peerInfo.recv[0].step = 0;
-    Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, sendPeers, recvPeers, data_src, NULL, &peerInfo,
+    Primitives<float, FuncSum<float>, FanAsymmetric<0,1>, 1, Proto, 0> prims(
+        tid, nthreads, &recvPeers, &sendPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
     prims.send(0, size);
-    return;
 }
 
 __global__ void test_recv(float *data_dst, char *recvbuff,
@@ -51,20 +50,19 @@ __global__ void test_recv(float *data_dst, char *recvbuff,
     using Proto = ProtoLL;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
-    int sendPeers[2] = {0, -1};
-    int recvPeers[2] = {0, -1};
+    int recvPeers = 0;
+    int sendPeers = -1;
     ncclDevChannelPeer peerInfo;
     // peerInfo.send[0].buffs[NCCL_PROTO_LL] = recvbuff;
-    peerInfo.send[0].head = sendConnHead;
-    peerInfo.send[0].step = 0;
+    peerInfo.recv[0].head = sendConnHead;
+    peerInfo.recv[0].step = 0;
     peerInfo.recv[0].buffs[NCCL_PROTO_LL] = recvbuff;
     // peerInfo.recv[0].head = sendConnHead;
     peerInfo.recv[0].step = 0;
-    Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, sendPeers, recvPeers, NULL, data_dst, &peerInfo,
+    Primitives<float, FuncSum<float>, FanAsymmetric<1,0>, 1, Proto, 0> prims(
+        tid, nthreads, &recvPeers, &sendPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
     prims.recv(0, size);
-    return;
 }
 
 // test GPU 0 send to GPU 1
@@ -79,47 +77,58 @@ int sendrecv_test(int rank)
     // located on receiver GPU. The sendConnHead is the buffer used to sync the
     // sender and receiver GPU to avoid data corruption. It is located on sender
     // GPU.
-    char *recvbuff;
-    uint64_t *sendConnHead;
+    char *recvbuff = NULL;
+    uint64_t *sendConnHead = NULL;
     // enable peer access
-    CUDACHECK(cudaSetDevice(0));
-    CUDACHECK(cudaDeviceEnablePeerAccess(1, 0));
-    CUDACHECK(cudaSetDevice(1));
-    CUDACHECK(cudaDeviceEnablePeerAccess(0, 0));
 
-    CUDACHECK(cudaSetDevice(0));
+    int myNghr = (rank+1)%2;
+    CUDACHECK(cudaSetDevice(rank));
+    //CUDACHECK(cudaDeviceEnablePeerAccess(myNghr, 0));
+
     CUDACHECK(cudaMalloc(&data_src, size * sizeof(float)));
-    CUDACHECK(cudaMalloc(&sendConnHead, sizeof(uint64_t)));
-    CUDACHECK(cudaSetDevice(1));
     CUDACHECK(cudaMalloc(&data_dst, size * sizeof(float)));
+    cudaIpcMemHandle_t headHandle;
+    if (rank == 0){
+      CUDACHECK(cudaMalloc(&sendConnHead, sizeof(uint64_t)));
+      CUDACHECK(cudaIpcGetMemHandle(&headHandle, sendConnHead));
+    }
+    MPI_Bcast(&headHandle, sizeof(cudaIpcMemHandle_t), MPI_CHAR, 0, MPI_COMM_WORLD);
+    if (rank == 1)
+      CUDACHECK(cudaIpcOpenMemHandle((void**)&sendConnHead, headHandle, cudaIpcMemLazyEnablePeerAccess));
     // currently I set recvbuff to two times of size of data to avoid error
-    CUDACHECK(cudaMalloc(&recvbuff, 2 * size * sizeof(float)));
+    cudaIpcMemHandle_t recvHandle;
+    if (rank == 1){
+      CUDACHECK(cudaMalloc(&recvbuff, 2 * size * sizeof(float)));
+      CUDACHECK(cudaIpcGetMemHandle(&recvHandle, recvbuff));
+    }
+    MPI_Bcast(&recvHandle, sizeof(cudaIpcMemHandle_t), MPI_CHAR, 1, MPI_COMM_WORLD);
+    if (rank == 0){
+      CUDACHECK(cudaIpcOpenMemHandle((void**)&recvbuff, recvHandle, cudaIpcMemLazyEnablePeerAccess));
+    }
     float *h_data_src = (float *)malloc(size * sizeof(float));
     float *h_data_dst = (float *)malloc(size * sizeof(float));
     for (int i = 0; i < size; i++) {
         h_data_src[i] = rand() % 100;
         h_data_dst[i] = 0;
     }
-    CUDACHECK(cudaSetDevice(0));
-    CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
+    if (rank == 0)
+      CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
-    CUDACHECK(cudaSetDevice(0));
-    test_send<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
-    CUDACHECK(cudaSetDevice(1));
-    test_recv<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
-    CUDACHECK(cudaSetDevice(0));
+    if (rank == 0)
+      test_send<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
+    else
+      test_recv<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
     CUDACHECK(cudaDeviceSynchronize());
-    CUDACHECK(cudaSetDevice(1));
-    CUDACHECK(cudaDeviceSynchronize());
-    CUDACHECK(cudaSetDevice(1));
-    CUDACHECK(cudaMemcpy(h_data_dst, data_dst, size * sizeof(float),
-                         cudaMemcpyDeviceToHost));
-    for (int i = 0; i < size; i++) {
+    if (rank == 1){
+      CUDACHECK(cudaMemcpy(h_data_dst, data_dst, size * sizeof(float),
+            cudaMemcpyDeviceToHost));
+      for (int i = 0; i < size; i++) {
         if (h_data_dst[i] != h_data_src[i]) {
-            printf("Error: h_data_dst[%d] = %f != %f ", i, h_data_dst[i],
-                   h_data_src[i]);
-            return -1;
+          printf("Error: h_data_dst[%d] = %f != %f ", i, h_data_dst[i],
+              h_data_src[i]);
+          return -1;
         }
+      }
     }
     printf("Success\n");
     return 0;

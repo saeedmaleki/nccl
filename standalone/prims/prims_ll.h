@@ -362,11 +362,11 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     // We compare with Fan::MaxRecv here because this->MaxRecv is always at
     // least 1
     while (nrecv < Fan::MaxRecv && recvPeers[nrecv] >= 0) {
-      loadRecvConn(&channel_peer[recvPeers[nrecv]].recv[connIndex], nrecv);
+      loadRecvConn(&channel_peer[0].recv[connIndex], nrecv);
       nrecv++;
     }
     while (nsend < MaxSend && sendPeers[nsend] >= 0) {
-      loadSendConn(&channel_peer[sendPeers[nsend]].send[connIndex], nsend);
+      loadSendConn(&channel_peer[0].send[connIndex], nsend);
       nsend++;
     }
     this->fan = Fan(nrecv, nsend);
