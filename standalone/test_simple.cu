@@ -25,6 +25,8 @@ __global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.send[0].head = head;
     peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
+    peerInfo.send[0].sizesFifo = NULL;
+    peerInfo.send[0].offsFifo = NULL;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
@@ -46,6 +48,8 @@ __global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.recv[0].head = head;
     peerInfo.recv[0].tail = tail;
     peerInfo.recv[0].step = 0;
+    peerInfo.recv[0].sizesFifo = NULL;
+    peerInfo.recv[0].offsFifo = NULL;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
@@ -56,7 +60,7 @@ __global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
 // test GPU 0 send to GPU 1 using simple protocol
 int sendrecv_test_simple()
 {
-    int size = 256;
+    int size = 1024;
     // There are five buffers that needs to be allocated in Simple protocol. The
     // data_src is the data source buffer, located on sender GPU. The data_dst
     // is the data destination buffer, located on receiver GPU.

@@ -15,11 +15,11 @@ EXE = $(BUILDDIR)/test_simple $(BUILDDIR)/test_ll
 
 all: $(EXE)
 
-$(BUILDDIR)/test_simple:
+$(BUILDDIR)/test_simple: test_simple.cu
 	mkdir -p $(BUILDDIR)
 	$(NVCC) $(CFLAGS) $(INCLUDE) test_simple.cu -o $@
 
-$(BUILDDIR)/test_ll:
+$(BUILDDIR)/test_ll: test_ll.cu
 	mkdir -p $(BUILDDIR)
 	$(NVCC) $(CFLAGS) $(INCLUDE) test_ll.cu -o $@
 
