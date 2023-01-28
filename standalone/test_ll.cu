@@ -11,19 +11,8 @@
         }                                                                      \
     } while (0)
 
-__global__ void test(float *input, float *output, int size)
-{
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
-                              ALLREDUCE_SLICESTEPS>;
-    int tid = threadIdx.x;
-    int nthreads = blockDim.x;
-    Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, NULL, NULL, NULL, NULL, ncclDevSum);
-    return;
-}
-
-__global__ void test_send(float *data_src, char *recvbuff,
-                          uint64_t *sendConnHead, int size)
+__global__ void test_send_ll(float *data_src, char *recvbuff,
+                             uint64_t *sendConnHead, int size)
 {
     using Proto = ProtoLL;
     int tid = threadIdx.x;
@@ -44,8 +33,8 @@ __global__ void test_send(float *data_src, char *recvbuff,
     return;
 }
 
-__global__ void test_recv(float *data_dst, char *recvbuff,
-                          uint64_t *sendConnHead, int size)
+__global__ void test_recv_ll(float *data_dst, char *recvbuff,
+                             uint64_t *sendConnHead, int size)
 {
     using Proto = ProtoLL;
     int tid = threadIdx.x;
@@ -66,8 +55,8 @@ __global__ void test_recv(float *data_dst, char *recvbuff,
     return;
 }
 
-// test GPU 0 send to GPU 1
-int sendrecv_test()
+// test GPU 0 send to GPU 1 using LL protocol
+int sendrecv_test_ll()
 {
     int size = 1024;
     // There are four buffers that needs to be allocated in LL protocol. The
@@ -103,9 +92,9 @@ int sendrecv_test()
     CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
     CUDACHECK(cudaSetDevice(0));
-    test_send<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
+    test_send_ll<<<1, 32>>>(data_src, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(1));
-    test_recv<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
+    test_recv_ll<<<1, 32>>>(data_dst, recvbuff, sendConnHead, size);
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
@@ -127,5 +116,5 @@ int sendrecv_test()
 int main()
 {
     setbuf(stdout, NULL);
-    sendrecv_test();
+    sendrecv_test_ll();
 }
