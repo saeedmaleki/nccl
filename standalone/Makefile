@@ -1,27 +1,33 @@
 NVCC = nvcc
 
-CFLAGS = 
+NVCUFLAGS = 
+ifeq ($(MPI), 1)
+NVCUFLAGS += -DMPI_SUPPORT -I$(MPI_HOME)/include
+NVLDFLAGS += -L$(MPI_HOME)/lib -L$(MPI_HOME)/lib64 -lmpi
+endif
+
 
 INCLUDE = -I include -I prims
 
 # Source files
-SOURCES = test_simple.cu test_ll.cu
+SOURCES := test_mpi.cu test_single.cu test_ll.cu
+
 
 BUILDDIR = build
 
-OBJECTS = $(BUILDDIR)/test_simple.o $(BUILDDIR)/test_ll.o
+OBJECTS = $(SOURCES:%.cu=$(BUILDDIR)/%.o)
 
-EXE = $(BUILDDIR)/test_simple $(BUILDDIR)/test_ll
+EXE = $(BUILDDIR)/$(SOURCES:.cu=_perf)
+
 
 all: $(EXE)
 
-$(BUILDDIR)/test_simple: test_simple.cu
+$(BUILDDIR)/%.o: %.cu
 	mkdir -p $(BUILDDIR)
-	$(NVCC) $(CFLAGS) $(INCLUDE) test_simple.cu -o $@
+	$(NVCC) $(NVCUFLAGS) $(INCLUDE) -c $< -o $@
 
-$(BUILDDIR)/test_ll: test_ll.cu
-	mkdir -p $(BUILDDIR)
-	$(NVCC) $(CFLAGS) $(INCLUDE) test_ll.cu -o $@
+${BUILDDIR}/%_perf:${BUILDDIR}/%.o
+	$(NVCC) $(NVLDFLAGS) $^ -o $@
 
 # Clean up
 clean:
