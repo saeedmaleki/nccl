@@ -10,14 +10,14 @@ endif
 INCLUDE = -I include -I prims
 
 # Source files
-SOURCES := test_mpi.cu test_single.cu test_ll.cu
+SOURCES := test_mpi.cu test_simple.cu test_ll.cu
 
 
 BUILDDIR = build
 
 OBJECTS = $(SOURCES:%.cu=$(BUILDDIR)/%.o)
 
-EXE = $(BUILDDIR)/$(SOURCES:.cu=_perf)
+EXE = $(SOURCES:%.cu=$(BUILDDIR)/%_perf)
 
 
 all: $(EXE)
