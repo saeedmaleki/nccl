@@ -9,24 +9,23 @@ endif
 
 INCLUDE = -I include -I prims
 
-# Source files
-SOURCES := test_mpi.cu test_simple.cu test_ll.cu
-
+# unit test source files
+USRC = unittest/test_mpi.cu unittest/test_simple.cu unittest/test_ll.cu #unittest/test_ib.cu
 
 BUILDDIR = build
 
-OBJECTS = $(SOURCES:%.cu=$(BUILDDIR)/%.o)
+OBJECTS = $(USRC:%.cu=$(BUILDDIR)/%.o)
 
-EXE = $(SOURCES:%.cu=$(BUILDDIR)/%_perf)
+EXE = $(USRC:%.cu=$(BUILDDIR)/%_perf)
 
 
 all: $(EXE)
 
-$(BUILDDIR)/%.o: %.cu
-	mkdir -p $(BUILDDIR)
+$(BUILDDIR)/unittest/%.o: unittest/%.cu
+	mkdir -p $(BUILDDIR)/unittest
 	$(NVCC) $(NVCUFLAGS) $(INCLUDE) -c $< -o $@
 
-${BUILDDIR}/%_perf:${BUILDDIR}/%.o
+${BUILDDIR}/unittest/%_perf:${BUILDDIR}/unittest/%.o
 	$(NVCC) $(NVLDFLAGS) $^ -o $@
 
 # Clean up
