@@ -9,16 +9,6 @@
 
 #include "debug.h"
 
-typedef enum { ncclSuccess                 =  0,
-               ncclUnhandledCudaError      =  1,
-               ncclSystemError             =  2,
-               ncclInternalError           =  3,
-               ncclInvalidArgument         =  4,
-               ncclInvalidUsage            =  5,
-               ncclRemoteError             =  6,
-               ncclInProgress              =  7,
-               ncclNumResults              =  8 } ncclResult_t;
-
 // Check CUDA RT calls
 #define CUDACHECK(cmd) do {                                 \
     cudaError_t err = cmd;                                  \

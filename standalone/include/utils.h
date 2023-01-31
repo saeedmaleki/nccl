@@ -272,21 +272,21 @@ inline void ncclMemoryPoolConstruct(struct ncclMemoryPool* me) {
   me->head = nullptr;
 }
 
-template<typename T>
-inline T* ncclMemoryPoolAlloc(struct ncclMemoryPool* me, struct ncclMemoryStack* backing) {
-  using Cell = ncclMemoryPool::Cell;
-  using CellSized = ncclMemoryPool::CellSized<sizeof(T), alignof(T)>;
-  Cell* cell;
-  if (__builtin_expect(me->head != nullptr, true)) {
-    cell = me->head;
-    me->head = cell->next;
-  } else {
-    // Use the internal allocate() since it doesn't memset to 0 yet.
-    cell = (Cell*)ncclMemoryStack::allocate(backing, sizeof(CellSized), alignof(CellSized));
-  }
-  memset(cell, 0, sizeof(T));
-  return reinterpret_cast<T*>(cell);
-}
+// template<typename T>
+// inline T* ncclMemoryPoolAlloc(struct ncclMemoryPool* me, struct ncclMemoryStack* backing) {
+//   using Cell = ncclMemoryPool::Cell;
+//   using CellSized = ncclMemoryPool::CellSized<sizeof(T), alignof(T)>;
+//   Cell* cell;
+//   if (__builtin_expect(me->head != nullptr, true)) {
+//     cell = me->head;
+//     me->head = cell->next;
+//   } else {
+//     // Use the internal allocate() since it doesn't memset to 0 yet.
+//     cell = (Cell*)ncclMemoryStack::allocate(backing, sizeof(CellSized), alignof(CellSized));
+//   }
+//   memset(cell, 0, sizeof(T));
+//   return reinterpret_cast<T*>(cell);
+// }
 
 template<typename T>
 inline void ncclMemoryPoolFree(struct ncclMemoryPool* me, T* obj) {
