@@ -7,6 +7,7 @@
 #ifndef NCCL_DEBUG_H_
 #define NCCL_DEBUG_H_
 
+#include "param.h"
 #include "nccl_net.h"
 #include <stdio.h>
 #include <chrono>

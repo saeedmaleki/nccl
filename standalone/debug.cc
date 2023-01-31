@@ -8,6 +8,8 @@
 #include "nccl_net.h"
 #include <stdlib.h>
 #include <stdarg.h>
+#include <unistd.h>
+
 #include <sys/syscall.h>
 
 int ncclDebugLevel = -1;
