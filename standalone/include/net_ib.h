@@ -146,11 +146,10 @@ static int ncclIbRelaxedOrderingCapable(void) {
   return r == ncclInternalError ? 0 : 1;
 }
 
-ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
+ncclResult_t ncclIbInit() {
   if (ncclParamIbDisable()) return ncclInternalError;
   static int shownIbHcaEnv = 0;
-  // if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
-
+  if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
   if (ncclNIbDevs == -1) {
     pthread_mutex_lock(&ncclIbLock);
     wrap_ibv_fork_init();

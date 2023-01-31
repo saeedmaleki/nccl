@@ -2,5 +2,6 @@
 
 int main()
 {
-
+    setbuf(stdout, NULL);
+    ncclIbInit();
 }
