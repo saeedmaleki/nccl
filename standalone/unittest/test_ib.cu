@@ -3,5 +3,9 @@
 int main()
 {
     setbuf(stdout, NULL);
-    ncclIbInit();
+    ncclDebugLogger_t logger;
+    ncclNetIb.init(logger);
+    int devicenum;
+    ncclNetIb.devices(&devicenum);
+    printf("devicenum=%d", devicenum);
 }

@@ -11,6 +11,7 @@
 // #include "graph.h"
 #include "utils.h"
 #include "param.h"
+
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -146,10 +147,11 @@ static int ncclIbRelaxedOrderingCapable(void) {
   return r == ncclInternalError ? 0 : 1;
 }
 
-ncclResult_t ncclIbInit() {
+ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
   if (ncclParamIbDisable()) return ncclInternalError;
   static int shownIbHcaEnv = 0;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
+
   if (ncclNIbDevs == -1) {
     pthread_mutex_lock(&ncclIbLock);
     wrap_ibv_fork_init();
@@ -292,7 +294,7 @@ ncclResult_t ncclIbDmaBufSupport(int dev) {
     ctx = ncclIbDevs[dev].context;
     NCCLCHECKGOTO(wrap_ibv_alloc_pd(&pd, ctx), res, failure);
     // Test kernel DMA-BUF support with a dummy call (fd=-1)
-    // (void) wrap_direct_ibv_reg_dmabuf_mr(pd, 0ULL/*offset*/, 0ULL/*len*/, 0ULL/*iova*/, -1/*fd*/, 0/*flags*/);
+    (void) wrap_direct_ibv_reg_dmabuf_mr(pd, 0ULL/*offset*/, 0ULL/*len*/, 0ULL/*iova*/, -1/*fd*/, 0/*flags*/);
     // ibv_reg_dmabuf_mr() will fail with EOPNOTSUPP/EPROTONOSUPPORT if not supported (EBADF otherwise)
     dmaBufSupported = (errno != EOPNOTSUPP && errno != EPROTONOSUPPORT) ? 1 : 0;
     NCCLCHECKGOTO(wrap_ibv_dealloc_pd(pd), res, failure);
@@ -1308,4 +1310,24 @@ ncclResult_t ncclIbCloseListen(void* listenComm) {
   }
   return ncclSuccess;
 }
+
+ncclNet_t ncclNetIb = {
+  "IB",
+  ncclIbInit,
+  ncclIbDevices,
+  ncclIbGetProperties,
+  ncclIbListen,
+  ncclIbConnect,
+  ncclIbAccept,
+  ncclIbRegMr,
+  ncclIbRegMrDmaBuf,
+  ncclIbDeregMr,
+  ncclIbIsend,
+  ncclIbIrecv,
+  ncclIbIflush,
+  ncclIbTest,
+  ncclIbCloseSend,
+  ncclIbCloseRecv,
+  ncclIbCloseListen
+};
 
