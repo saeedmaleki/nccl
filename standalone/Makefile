@@ -24,10 +24,6 @@ UNITTESTOBJ := $(UNITTESTSRC:%.cu=$(BUILDDIR)/%.o)
 
 all: $(UNITTEST)
 
-$(UBIN): %: %.o $(LIBOBJ)
-	mkdir -p $(BUILDDIR)/unittest
-	$(NVCC) $(NVLDFLAGS) $^ -o $@
-
 $(BUILDDIR)/unittest/%.o: unittest/%.cu 
 	mkdir -p $(BUILDDIR)/unittest
 	$(NVCC) $(NVCUFLAGS) $(INCLUDE) -c $< -o $@
@@ -36,9 +32,9 @@ $(LIBOBJ): $(BUILDDIR)/%.o: %.cc
 	mkdir -p $(BUILDDIR)/misc
 	$(NVCC) $(NVCUFLAGS) $(INCLUDE) -c $< -o $@
 
-${BUILDDIR}/unittest/%_perf:${BUILDDIR}/unittest/%.o $(LIBOBJ)
+${UNITTEST}: ${BUILDDIR}/unittest/%_perf:${BUILDDIR}/unittest/%.o $(LIBOBJ)
 	$(NVCC) $(NVLDFLAGS) $^ -o $@
 
 # Clean up
 clean:
-	rm -f $(OBJECTS) $(UNITTEST)
+	rm -r $(BUILDDIR)/*
