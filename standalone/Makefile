@@ -24,7 +24,7 @@ UNITTESTOBJ := $(UNITTESTSRC:%.cu=$(BUILDDIR)/%.o)
 
 all: $(UNITTEST)
 
-$(BUILDDIR)/unittest/%.o: unittest/%.cu 
+${UNITTESTOBJ}: $(BUILDDIR)/unittest/%.o: unittest/%.cu 
 	mkdir -p $(BUILDDIR)/unittest
 	$(NVCC) $(NVCUFLAGS) $(INCLUDE) -c $< -o $@
 
