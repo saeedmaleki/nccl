@@ -31,7 +31,12 @@ int ib_send()
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
-    // NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle, 0));
+    int *requset;
+    requset = (int *)malloc(sizeof(int));
+    NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
+                          (void **)&requset));
+    if (requset == 0)
+        printf("send request is 0\n");
     printf("Send finished\n");
 }
 
@@ -63,8 +68,12 @@ int ib_recv()
                           (void **)&mhandle));
     int size = bytes;
     int tag = TAG;
-    // NCCLCHECK(ncclIbIrecv(recvComm, 1, (void **)&recvbuff, &size, &tag,
-    //                       (void **)&mhandle, 0));
+    int *requset;
+    requset = (int *)malloc(sizeof(int));
+    NCCLCHECK(ncclIbIrecv(recvComm, 1, (void **)&recvbuff, &size, &tag,
+                          (void **)&mhandle, (void **)&requset));
+    if (requset == 0)
+        printf("recv request is 0\n");
     // check the recvbuff
     for (int i = 0; i < bytes; i++) {
         if (recvbuff[i] != i) {
@@ -72,8 +81,7 @@ int ib_recv()
             return -1;
         }
     }
-    
-    
+
     printf("Success\n");
 }
 
