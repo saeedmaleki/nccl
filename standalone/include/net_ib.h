@@ -607,11 +607,8 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
 ib_connect_check:
   /* since ncclSocketConnect is async, we must check if connection is complete */
   NCCLCHECK(ncclSocketReady(&comm->sock, &ready));
-  if (!ready) {
-    printf("ncclSocketConnect not ready\n");
-    return ncclSuccess;
-  }
-  printf("IB setup\n");
+  if (!ready) return ncclSuccess;
+
   // IB Setup
   struct ibv_context* ctx;
   ctx = ncclIbDevs[dev].context;
@@ -693,10 +690,8 @@ ncclResult_t ncclIbAccept(void* listenComm, void** recvComm) {
 
 ib_accept_check:
   NCCLCHECK(ncclSocketReady(&rComm->sock, &ready));
-  if (!ready) {
-    printf("accept not ready\n");
-    return ncclSuccess;
-  }
+  if (!ready) return ncclSuccess;
+  
   struct ncclIbQpInfo remQpInfo;
   stage->state = ncclIbCommStateRecv;
   stage->offset = 0;
