@@ -577,7 +577,7 @@ ncclResult_t ncclIbListen(int dev, void* opaqueHandle, void** listenComm) {
   memset(handle, 0, sizeof(struct ncclIbHandle));
   comm->dev = dev;
   handle->magic = NCCL_SOCKET_MAGIC;
-  NCCLCHECK(ncclSocketInit(&comm->sock, &ncclIbIfAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
+  NCCLCHECK(ncclSocketInit(&comm->sock, &ncclIbIfAddr, handle->magic, ncclSocketTypeNetIb, NULL, 0));
   NCCLCHECK(ncclSocketListen(&comm->sock));
   NCCLCHECK(ncclSocketGetAddr(&comm->sock, &handle->connectAddr));
   *listenComm = comm;
@@ -599,7 +599,7 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
   }
 
   NCCLCHECK(ncclIbMalloc((void**)&comm, sizeof(struct ncclIbSendComm)));
-  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
+  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 0));
   stage->comm = comm;
   stage->state = ncclIbCommStateConnect;
   NCCLCHECK(ncclSocketConnect(&comm->sock));
@@ -607,8 +607,11 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
 ib_connect_check:
   /* since ncclSocketConnect is async, we must check if connection is complete */
   NCCLCHECK(ncclSocketReady(&comm->sock, &ready));
-  if (!ready) return ncclSuccess;
-
+  if (!ready) {
+    printf("ncclSocketConnect not ready\n");
+    return ncclSuccess;
+  }
+  printf("IB setup\n");
   // IB Setup
   struct ibv_context* ctx;
   ctx = ncclIbDevs[dev].context;
@@ -690,8 +693,10 @@ ncclResult_t ncclIbAccept(void* listenComm, void** recvComm) {
 
 ib_accept_check:
   NCCLCHECK(ncclSocketReady(&rComm->sock, &ready));
-  if (!ready) return ncclSuccess;
-
+  if (!ready) {
+    printf("accept not ready\n");
+    return ncclSuccess;
+  }
   struct ncclIbQpInfo remQpInfo;
   stage->state = ncclIbCommStateRecv;
   stage->offset = 0;
