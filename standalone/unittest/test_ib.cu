@@ -8,7 +8,7 @@
 int ib_send()
 {
     ncclDebugLogger_t logger;
-    setenv("NCCL_IB_HCA", "=mlx5_ib1:7001", 1);
+    // setenv("NCCL_IB_HCA", "mlx5_ib1:1", 1);
     NCCLCHECK(ncclIbInit(logger));
     char *sendbuff = (char *)malloc(bytes);
     for (int i = 0; i < bytes; i++) {
@@ -20,14 +20,17 @@ int ib_send()
     handle.connectAddr.sin.sin_family = AF_INET;
     handle.connectAddr.sin.sin_port = htons(PORT);
     inet_aton(ADDR, &handle.connectAddr.sin.sin_addr);
+    // this magic is used to identify if the connection is established by NCCL
+    // or if the connection is a polluted connection
+    handle.magic = NCCL_SOCKET_MAGIC;
     // ncclIbIfAddr.sin.sin_family = AF_INET;
     // ncclIbIfAddr.sin.sin_port = htons(PORT);
     // inet_aton("127.0.0.1", &ncclIbIfAddr.sin.sin_addr);
     // the sender uses ib1
     NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
     ibv_mr *mhandle;
-    // NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
-    //                       (void **)&mhandle));
+    NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
+                          (void **)&mhandle));
     // NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle, 0));
     printf("Send finished\n");
 }
@@ -35,7 +38,7 @@ int ib_send()
 int ib_recv()
 {
     ncclDebugLogger_t logger;
-    setenv("NCCL_IB_HCA", "mlx5_ib2:1", 1);
+    // setenv("NCCL_IB_HCA", "mlx5_ib2:1", 1);
 
     NCCLCHECK(ncclIbInit(logger));
     char *recvbuff = (char *)malloc(bytes);
@@ -47,18 +50,19 @@ int ib_recv()
     // ncclIbIfAddr.sin.sin_family = AF_INET;
     // ncclIbIfAddr.sin.sin_port = htons(PORT);
     // inet_aton("127.0.0.1", &ncclIbIfAddr.sin.sin_addr);
-    // printf("ncclIbIfAddr.sin.sin_addr=%s", inet_ntoa(ncclIbIfAddr.sin.sin_addr));
+    // printf("ncclIbIfAddr.sin.sin_addr=%s",
+    // inet_ntoa(ncclIbIfAddr.sin.sin_addr));
     // printf("ncclIbIfAddr.sin.sin_addr=%s", (ncclIbIfAddr.sin.sin_addr));
     // the receiver uses ib0
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));
 
     ncclIbRecvComm *recvComm;
     NCCLCHECK(ncclIbAccept(listenComm, (void **)&recvComm));
-    // ibv_mr *mhandle;
-    // NCCLCHECK(ncclIbRegMr(recvComm, recvbuff, bytes, NCCL_PTR_HOST,
-    //                       (void **)&mhandle));
-    // int size = bytes;
-    // int tag = TAG;
+    ibv_mr *mhandle;
+    NCCLCHECK(ncclIbRegMr(recvComm, recvbuff, bytes, NCCL_PTR_HOST,
+                          (void **)&mhandle));
+    int size = bytes;
+    int tag = TAG;
     // NCCLCHECK(ncclIbIrecv(recvComm, 1, (void **)&recvbuff, &size, &tag,
     //                       (void **)&mhandle, 0));
     // check the recvbuff
