@@ -1,3 +1,4 @@
+#include "alloc.h"
 #include "net_ib.h"
 #include <mpi.h>
 #include <unistd.h>
@@ -10,9 +11,11 @@ int ib_send()
     ncclDebugLogger_t logger;
     // setenv("NCCL_IB_HCA", "mlx5_ib1:1", 1);
     NCCLCHECK(ncclIbInit(logger));
-    char *sendbuff = (char *)malloc(bytes);
+    char *sendbuff = NULL;
+    NCCLCHECK(ncclIbMalloc((void **)&sendbuff, bytes));
+    printf("sendbuff=%p\n", sendbuff);
     for (int i = 0; i < bytes; i++) {
-        sendbuff[i] = i;
+        sendbuff[i] = i % 47;
     }
     ncclIbHandle handle;
     ncclIbSendComm *sendComm;
@@ -31,12 +34,20 @@ int ib_send()
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
-    int *requset;
-    requset = (int *)malloc(sizeof(int));
-    NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
-                          (void **)&requset));
-    if (requset == 0)
-        printf("send request is 0\n");
+    struct ncclIbRequest *requset = NULL;
+    int done = 0;
+    int finished_size = 0;
+    while (1) {
+        NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
+                              (void **)&requset));
+        if (requset != 0) {
+            break;
+        }
+    }
+    while (done == 0) {
+        NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
+    }
+
     printf("Send finished\n");
 }
 
@@ -46,7 +57,9 @@ int ib_recv()
     // setenv("NCCL_IB_HCA", "mlx5_ib2:1", 1);
 
     NCCLCHECK(ncclIbInit(logger));
-    char *recvbuff = (char *)malloc(bytes);
+    char *recvbuff = NULL;
+    NCCLCHECK(ncclIbMalloc((void **)&recvbuff, bytes));
+    printf("recvbuff=%p\n", recvbuff);
     ncclIbHandle handle;
     ncclIbListenComm *listenComm;
     // handle.connectAddr.sin.sin_family = AF_INET;
@@ -68,15 +81,17 @@ int ib_recv()
                           (void **)&mhandle));
     int size = bytes;
     int tag = TAG;
-    int *requset;
-    requset = (int *)malloc(sizeof(int));
+    struct ncclIbRequest *requset = NULL;
     NCCLCHECK(ncclIbIrecv(recvComm, 1, (void **)&recvbuff, &size, &tag,
                           (void **)&mhandle, (void **)&requset));
-    if (requset == 0)
-        printf("recv request is 0\n");
+    int done = 0;
+    int finished_size = 0;
+    while (done == 0) {
+        NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
+    }
     // check the recvbuff
     for (int i = 0; i < bytes; i++) {
-        if (recvbuff[i] != i) {
+        if (recvbuff[i] != i % 47) {
             printf("Error: recvbuff[%d]=%d\n", i, recvbuff[i]);
             return -1;
         }
