@@ -24,11 +24,7 @@ int ib_send()
     handle.connectAddr.sin.sin_port = htons(PORT);
     inet_aton(ADDR, &handle.connectAddr.sin.sin_addr);
     // this magic is used to identify if the connection is established by NCCL
-    // or if the connection is a polluted connection
     handle.magic = NCCL_SOCKET_MAGIC;
-    // ncclIbIfAddr.sin.sin_family = AF_INET;
-    // ncclIbIfAddr.sin.sin_port = htons(PORT);
-    // inet_aton("127.0.0.1", &ncclIbIfAddr.sin.sin_addr);
     // the sender uses ib1
     NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
     ibv_mr *mhandle;
@@ -62,16 +58,6 @@ int ib_recv()
     printf("recvbuff=%p\n", recvbuff);
     ncclIbHandle handle;
     ncclIbListenComm *listenComm;
-    // handle.connectAddr.sin.sin_family = AF_INET;
-    // handle.connectAddr.sin.sin_port = htons(PORT);
-    // inet_aton("127.0.0.1", &handle.connectAddr.sin.sin_addr);
-    // ncclIbIfAddr.sin.sin_family = AF_INET;
-    // ncclIbIfAddr.sin.sin_port = htons(PORT);
-    // inet_aton("127.0.0.1", &ncclIbIfAddr.sin.sin_addr);
-    // printf("ncclIbIfAddr.sin.sin_addr=%s",
-    // inet_ntoa(ncclIbIfAddr.sin.sin_addr));
-    // printf("ncclIbIfAddr.sin.sin_addr=%s", (ncclIbIfAddr.sin.sin_addr));
-    // the receiver uses ib0
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));
 
     ncclIbRecvComm *recvComm;
@@ -102,11 +88,6 @@ int ib_recv()
 
 int ib_sendrecv_test(int world_rank)
 {
-    // int devicenum;
-    // ncclNetIb.devices(&devicenum);
-    // printf("devicenum=%d", devicenum);
-    // ncclNetProperties_t properties;
-    // NCCLCHECK(ncclIbGetProperties(0, &properties));
     if (world_rank == 0) {
         ib_send();
     } else if (world_rank == 1) {
