@@ -21,6 +21,7 @@
 int ib_send()
 {
     ncclDebugLogger_t logger;
+    // gets all ib devices and stores them in ncclIbDevs
     NCCLCHECK(ncclIbInit(logger));
     char *sendbuff = NULL;
     NCCLCHECK(ncclIbMalloc((void **)&sendbuff, bytes));
@@ -35,22 +36,27 @@ int ib_send()
     handle.magic = NCCL_SOCKET_MAGIC;
     // the sender uses ib1
     ncclIbSendComm *sendComm = NULL;
+    // call socket connect to establish the connection, exchange the qp and cq
+    // and fifo
     while (sendComm == NULL) {
         NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
     }
+    // register the sendbuff using ibv_reg_mr
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
     struct ncclIbRequest *requset = NULL;
 
     while (requset == NULL) {
-        // the ncclIbIsend is non-blocking, so we need to run it in a loop
+        // the ncclIbIsend is non-blocking, it first checks the fifo,
+        //so we need to run it in a loop
         NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
                               (void **)&requset));
     }
     int done = 0;
     int finished_size = 0;
     while (done == 0) {
+        // call ibv_poll_cq to check if the send request is finished
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
 }
@@ -64,25 +70,30 @@ int ib_recv()
     NCCLCHECK(ncclIbMalloc((void **)&recvbuff, bytes));
     ncclIbHandle handle;
     ncclIbListenComm *listenComm;
+    // set the recv listen port
     ncclIbIfAddr.sin.sin_port = htons(PORT);
+    // start socket listen
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));
-
+    // accept the socket connection from the sender, exchange the qp and cq and
+    // fifo
     ncclIbRecvComm *recvComm = NULL;
     while (recvComm == NULL) {
         NCCLCHECK(ncclIbAccept(listenComm, (void **)&recvComm));
     }
-
+    // register the recvbuff using ibv_reg_mr
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(recvComm, recvbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
     int size = bytes;
     int tag = TAG;
     struct ncclIbRequest *requset = NULL;
+    // call ibv_post_recv to post the recv request
     NCCLCHECK(ncclIbIrecv(recvComm, 1, (void **)&recvbuff, &size, &tag,
                           (void **)&mhandle, (void **)&requset));
     int done = 0;
     int finished_size = 0;
     while (done == 0) {
+        // call ibv_poll_cq to check if the recv request is finished
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
     // check the recvbuff
