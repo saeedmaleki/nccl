@@ -4,9 +4,18 @@
 #include <unistd.h>
 #define bytes 1024
 #define TAG 7
+
+// this PORT is set in nccl/standalone/misc/socket.cc ncclSocketListen line 380.
+// In previous NCCL code, this port is 0 (any port). I guess NCCL exchanged the
+// port and IP address in some ways, otherwise their is no way to know the port
+// and address of the other side.
 #define PORT 40000
-// this ADDR is the IP address of mlx5_ib0 on my machine, set it to your own
+// this ADDR is the IP address of mlx5_ib0 on my machine, set it to your own.
+// This IP address is used as OOB(Out of Band) address, which is used to
+// establish the connection and exchange the needed information like the cq and
+// qp of the IB connection.
 #define ADDR "172.16.1.138"
+
 // all of the functions of ncclNetIb is non-blocking, so we need to run them in
 // a loop
 int ib_send()
@@ -19,14 +28,13 @@ int ib_send()
         sendbuff[i] = i % 47;
     }
     ncclIbHandle handle;
-    ncclIbSendComm *sendComm = NULL;
-    ncclIbListenComm *listenComm;
     handle.connectAddr.sin.sin_family = AF_INET;
     handle.connectAddr.sin.sin_port = htons(PORT);
     inet_aton(ADDR, &handle.connectAddr.sin.sin_addr);
     // this magic is used to identify if the connection is established by NCCL
     handle.magic = NCCL_SOCKET_MAGIC;
     // the sender uses ib1
+    ncclIbSendComm *sendComm = NULL;
     while (sendComm == NULL) {
         NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
     }
@@ -34,21 +42,20 @@ int ib_send()
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
     struct ncclIbRequest *requset = NULL;
-    int done = 0;
-    int finished_size = 0;
-    while (1) {
+
+    while (requset == NULL) {
         // the ncclIbIsend is non-blocking, so we need to run it in a loop
         NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
                               (void **)&requset));
-        if (requset != 0) {
-            break;
-        }
     }
+    int done = 0;
+    int finished_size = 0;
     while (done == 0) {
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
-
-    printf("Send finished\n");
+    if (finished_size != bytes) {
+        printf("Error: finished_size=%d\n", finished_size);
+    }
 }
 
 int ib_recv()
@@ -62,8 +69,11 @@ int ib_recv()
     ncclIbListenComm *listenComm;
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));
 
-    ncclIbRecvComm *recvComm;
-    NCCLCHECK(ncclIbAccept(listenComm, (void **)&recvComm));
+    ncclIbRecvComm *recvComm = NULL;
+    while (recvComm == NULL) {
+        NCCLCHECK(ncclIbAccept(listenComm, (void **)&recvComm));
+    }
+
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(recvComm, recvbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
