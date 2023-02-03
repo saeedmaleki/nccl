@@ -13,7 +13,6 @@ int ib_send()
     NCCLCHECK(ncclIbInit(logger));
     char *sendbuff = NULL;
     NCCLCHECK(ncclIbMalloc((void **)&sendbuff, bytes));
-    printf("sendbuff=%p\n", sendbuff);
     for (int i = 0; i < bytes; i++) {
         sendbuff[i] = i % 47;
     }
@@ -50,12 +49,10 @@ int ib_send()
 int ib_recv()
 {
     ncclDebugLogger_t logger;
-    // setenv("NCCL_IB_HCA", "mlx5_ib2:1", 1);
 
     NCCLCHECK(ncclIbInit(logger));
     char *recvbuff = NULL;
     NCCLCHECK(ncclIbMalloc((void **)&recvbuff, bytes));
-    printf("recvbuff=%p\n", recvbuff);
     ncclIbHandle handle;
     ncclIbListenComm *listenComm;
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));

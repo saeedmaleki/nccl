@@ -10,7 +10,7 @@ endif
 INCLUDE = -I include -I prims
 
 # unit test source files
-UNITTESTSRC = unittest/test_mpi.cu unittest/test_simple.cu unittest/test_ll.cu unittest/test_ib.cu
+UNITTESTSRC = unittest/test_mpi.cu unittest/test_simple.cu unittest/test_ll.cu unittest/test_ib_mpi.cu
 # UNITTESTSRC = unittest/test_simple.cu
 LIBSRC = debug.cc misc/ibvwrap.cc misc/socket.cc misc/utils.cc misc/nvmlwrap.cc misc/param.cc
 
