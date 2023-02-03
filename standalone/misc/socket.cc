@@ -376,8 +376,6 @@ ncclResult_t ncclSocketListen(struct ncclSocket* sock) {
   }
 
   // addr port should be 0 (Any port)
-  // set port to 40000
-  sock->addr.sin.sin_port = htons(40000);
   SYSCHECK(bind(sock->fd, &sock->addr.sa, sock->salen), "bind");
 
   /* Get the assigned Port */

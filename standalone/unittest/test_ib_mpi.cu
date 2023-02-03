@@ -64,6 +64,7 @@ int ib_recv()
     NCCLCHECK(ncclIbMalloc((void **)&recvbuff, bytes));
     ncclIbHandle handle;
     ncclIbListenComm *listenComm;
+    ncclIbIfAddr.sin.sin_port = htons(PORT);
     NCCLCHECK(ncclIbListen(2, &handle, (void **)&listenComm));
 
     ncclIbRecvComm *recvComm = NULL;
