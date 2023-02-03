@@ -5,11 +5,13 @@
 #define bytes 1024
 #define TAG 7
 #define PORT 40000
+// this ADDR is the IP address of mlx5_ib0 on my machine, set it to your own
 #define ADDR "172.16.1.138"
+// all of the functions of ncclNetIb is non-blocking, so we need to run them in
+// a loop
 int ib_send()
 {
     ncclDebugLogger_t logger;
-    // setenv("NCCL_IB_HCA", "mlx5_ib1:1", 1);
     NCCLCHECK(ncclIbInit(logger));
     char *sendbuff = NULL;
     NCCLCHECK(ncclIbMalloc((void **)&sendbuff, bytes));
@@ -17,7 +19,7 @@ int ib_send()
         sendbuff[i] = i % 47;
     }
     ncclIbHandle handle;
-    ncclIbSendComm *sendComm;
+    ncclIbSendComm *sendComm = NULL;
     ncclIbListenComm *listenComm;
     handle.connectAddr.sin.sin_family = AF_INET;
     handle.connectAddr.sin.sin_port = htons(PORT);
@@ -25,7 +27,9 @@ int ib_send()
     // this magic is used to identify if the connection is established by NCCL
     handle.magic = NCCL_SOCKET_MAGIC;
     // the sender uses ib1
-    NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
+    while (sendComm == NULL) {
+        NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
+    }
     ibv_mr *mhandle;
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
@@ -33,6 +37,7 @@ int ib_send()
     int done = 0;
     int finished_size = 0;
     while (1) {
+        // the ncclIbIsend is non-blocking, so we need to run it in a loop
         NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
                               (void **)&requset));
         if (requset != 0) {
@@ -79,7 +84,6 @@ int ib_recv()
             return -1;
         }
     }
-
     printf("Success\n");
 }
 

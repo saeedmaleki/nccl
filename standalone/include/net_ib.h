@@ -599,7 +599,7 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
   }
 
   NCCLCHECK(ncclIbMalloc((void**)&comm, sizeof(struct ncclIbSendComm)));
-  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 0));
+  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
   stage->comm = comm;
   stage->state = ncclIbCommStateConnect;
   NCCLCHECK(ncclSocketConnect(&comm->sock));
@@ -691,7 +691,7 @@ ncclResult_t ncclIbAccept(void* listenComm, void** recvComm) {
 ib_accept_check:
   NCCLCHECK(ncclSocketReady(&rComm->sock, &ready));
   if (!ready) return ncclSuccess;
-  
+
   struct ncclIbQpInfo remQpInfo;
   stage->state = ncclIbCommStateRecv;
   stage->offset = 0;
