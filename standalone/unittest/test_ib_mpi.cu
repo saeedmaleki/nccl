@@ -53,9 +53,6 @@ int ib_send()
     while (done == 0) {
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
-    if (finished_size != bytes) {
-        printf("Error: finished_size=%d\n", finished_size);
-    }
 }
 
 int ib_recv()

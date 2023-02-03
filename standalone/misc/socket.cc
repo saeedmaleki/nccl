@@ -17,7 +17,6 @@ static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr
   *closed = 0;
   char* data = (char*)ptr;
   char line[SOCKET_NAME_MAXLEN+1];
-  block = 1;
   do {
     if (op == NCCL_SOCKET_RECV) bytes = recv(sock->fd, data+(*offset), size-(*offset), block ? 0 : MSG_DONTWAIT);
     if (op == NCCL_SOCKET_SEND) bytes = send(sock->fd, data+(*offset), size-(*offset), block ? MSG_NOSIGNAL : MSG_DONTWAIT | MSG_NOSIGNAL);
@@ -44,7 +43,7 @@ static ncclResult_t socketProgressOpt(int op, struct ncclSocket* sock, void* ptr
 
 static ncclResult_t socketProgress(int op, struct ncclSocket* sock, void* ptr, int size, int* offset) {
   int closed;
-  NCCLCHECK(socketProgressOpt(op, sock, ptr, size, offset, 0, &closed));
+  NCCLCHECK(socketProgressOpt(op, sock, ptr, size, offset, 1, &closed));
   if (closed) {
     char line[SOCKET_NAME_MAXLEN+1];
     WARN("socketProgress: Connection closed by remote peer %s", ncclSocketToString(&sock->addr, line, 0));
