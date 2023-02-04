@@ -5,15 +5,16 @@
 #define bytes 1024
 #define TAG 7
 
-// this PORT is set in nccl/standalone/misc/socket.cc ncclSocketListen line 380.
-// In previous NCCL code, this port is 0 (any port). I guess NCCL exchanged the
-// port and IP address in some ways, otherwise their is no way to know the port
-// and address of the other side.
+// this ADDR is the IP address of mlx5_ib0 on my machine, the port is the socket
+// communication port. Set it to your IP address of mlx5_ib0.
+// This IP address is used for OOB(Out of Band) connection.
+// NCCL chooses the first mlx5_ib0 IP address as the OOB address. In this test
+// code, the receiver will listen on this IP address and port, and the sender
+// will connect to this IP address and port. After the socket connection is
+// established, the two sides will exchange the ibv_mr and qp to set up the IB
+// connection. Then the sender will send data to the receiver using the IB.
 #define PORT 40000
-// this ADDR is the IP address of mlx5_ib0 on my machine, set it to your own.
-// This IP address is used as OOB(Out of Band) address, which is used to
-// establish the connection and exchange the needed information like the cq and
-// qp of the IB connection.
+
 #define ADDR "172.16.1.138"
 
 // all of the functions of ncclNetIb is non-blocking, so we need to run them in
@@ -43,20 +44,23 @@ int ib_send()
     }
     // register the sendbuff using ibv_reg_mr
     ibv_mr *mhandle;
+    // NCCL_PTR_HOST means the sendbuff is in the host memory, if it is in the
+    // GPU, we need to use NCCL_PTR_CUDA
     NCCLCHECK(ncclIbRegMr(sendComm, sendbuff, bytes, NCCL_PTR_HOST,
                           (void **)&mhandle));
     struct ncclIbRequest *requset = NULL;
 
     while (requset == NULL) {
         // the ncclIbIsend is non-blocking, it first checks the fifo,
-        //so we need to run it in a loop
+        // so we need to run it in a loop
         NCCLCHECK(ncclIbIsend(sendComm, sendbuff, bytes, TAG, mhandle,
                               (void **)&requset));
     }
     int done = 0;
     int finished_size = 0;
     while (done == 0) {
-        // call ibv_poll_cq to check if the send request is finished
+        // call ibv_poll_cq to check if the send requests work elements is
+        // completed
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
 }
@@ -93,10 +97,11 @@ int ib_recv()
     int done = 0;
     int finished_size = 0;
     while (done == 0) {
-        // call ibv_poll_cq to check if the recv request is finished
+        // call ibv_poll_cq to check if the recv requests work elements is
+        // completed
         NCCLCHECK(ncclIbTest(requset, &done, &finished_size));
     }
-    // check the recvbuff
+    // check if the recvbuff receives correct data
     for (int i = 0; i < bytes; i++) {
         if (recvbuff[i] != i % 47) {
             printf("Error: recvbuff[%d]=%d\n", i, recvbuff[i]);
