@@ -388,7 +388,7 @@ public:
     tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),
     warpInBlock(threadIdx.x/WARP_SIZE),
     flagThread((tid%8)==7), group(group&(uint16_t)0xFFFF),
-    stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
+    stepSize(76800) {
     int connIndex = group >> 16;
     auto *channel = &ncclShmem.channel;
     int nrecv=0, nsend=0;

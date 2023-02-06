@@ -12,7 +12,7 @@
     } while (0)
 
 __global__ void test_send_ll128(float *data_src, float *data_dst, char *buff,
-                                 uint64_t *head, uint64_t *tail, int size)
+                                uint64_t *head, uint64_t *tail, int size)
 {
     using Proto = ProtoLL128;
     int tid = threadIdx.x;
@@ -26,7 +26,7 @@ __global__ void test_send_ll128(float *data_src, float *data_dst, char *buff,
     peerInfo.send[0].step = 0;
     peerInfo.send[0].sizesFifo = NULL;
     peerInfo.send[0].offsFifo = NULL;
-    Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
+    Primitives<float, FuncSum<float>, FanAsymmetric<1, 1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
     prims.send(0, size);
@@ -34,7 +34,7 @@ __global__ void test_send_ll128(float *data_src, float *data_dst, char *buff,
 }
 
 __global__ void test_recv_ll128(float *data_src, float *data_dst, char *buff,
-                                 uint64_t *head, uint64_t *tail, int size)
+                                uint64_t *head, uint64_t *tail, int size)
 {
     using Proto = ProtoLL128;
     int tid = threadIdx.x;
@@ -48,7 +48,7 @@ __global__ void test_recv_ll128(float *data_src, float *data_dst, char *buff,
     peerInfo.recv[0].step = 0;
     peerInfo.recv[0].sizesFifo = NULL;
     peerInfo.recv[0].offsFifo = NULL;
-    Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
+    Primitives<float, FuncSum<float>, FanAsymmetric<1, 1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
     prims.recv(0, size);
