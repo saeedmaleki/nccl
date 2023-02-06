@@ -55,11 +55,11 @@ __global__ void test_recv_ll128(float *data_src, float *data_dst, char *buff,
     return;
 }
 
-// test GPU 0 send to GPU 1 using simple protocol
+// test GPU 0 send to GPU 1 using LL128 protocol
 int sendrecv_test_ll128()
 {
     int size = 1024;
-    // There are five buffers that needs to be allocated in Simple protocol. The
+    // There are five buffers that needs to be allocated in LL128 protocol. The
     // data_src is the data source buffer, located on sender GPU. The data_dst
     // is the data destination buffer, located on receiver GPU.
     float *data_src, *data_dst;
