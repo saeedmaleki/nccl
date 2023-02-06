@@ -380,6 +380,32 @@ public:
     setDataPtrs(inputBuf, outputBuf);
   }
 
+    __device__ Primitives(
+      const int tid, const int nthreads, int const *recvPeers, int const *sendPeers,
+      void const *inputBuf, void *outputBuf,struct ncclDevChannelPeer *channel_peer, uint64_t redOpArg, int group=0
+    ):
+    redOp(redOpArg),
+    tid(tid), nthreads(nthreads), wid(tid%WARP_SIZE), warp(tid/WARP_SIZE),
+    warpInBlock(threadIdx.x/WARP_SIZE),
+    flagThread((tid%8)==7), group(group&(uint16_t)0xFFFF),
+    stepSize(ncclShmem.comm.buffSizes[NCCL_PROTO_LL128]/NCCL_STEPS/sizeof(uint64_t)) {
+    int connIndex = group >> 16;
+    auto *channel = &ncclShmem.channel;
+    int nrecv=0, nsend=0;
+    while (nrecv < MaxRecv && recvPeers[nrecv] >= 0) {
+      loadRecvConn(&channel_peer[recvPeers[nrecv]].recv[connIndex], nrecv);
+      nrecv++;
+    }
+    while (nsend < MaxSend && sendPeers[nsend] >= 0) {
+      loadSendConn(&channel_peer[sendPeers[nsend]].send[connIndex], nsend);
+      nsend++;
+    }
+    this->fan = Fan(nrecv, nsend);
+    loadRecvSync();
+    loadSendSync();
+    setDataPtrs(inputBuf, outputBuf);
+  }
+
   __device__ ~Primitives() {
     // Save steps for the next operation
     if (tid >= nthreads-WARP_SIZE && wid < fan.nrecv())

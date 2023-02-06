@@ -11,17 +11,16 @@
         }                                                                      \
     } while (0)
 
-__global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
+__global__ void test_send_ll128(float *data_src, float *data_dst, char *buff,
                                  uint64_t *head, uint64_t *tail, int size)
 {
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
-                              ALLREDUCE_SLICESTEPS>;
+    using Proto = ProtoLL128;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {-1, -1};
     ncclDevChannelPeer peerInfo;
-    peerInfo.send[0].buffs[NCCL_PROTO_SIMPLE] = buff;
+    peerInfo.send[0].buffs[NCCL_PROTO_LL128] = buff;
     peerInfo.send[0].head = head;
     peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
@@ -34,17 +33,16 @@ __global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
     return;
 }
 
-__global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
+__global__ void test_recv_ll128(float *data_src, float *data_dst, char *buff,
                                  uint64_t *head, uint64_t *tail, int size)
 {
-    using Proto = ProtoSimple<ALLREDUCE_CHUNKSTEPS / ALLREDUCE_SLICESTEPS,
-                              ALLREDUCE_SLICESTEPS>;
+    using Proto = ProtoLL128;
     int tid = threadIdx.x;
     int nthreads = blockDim.x;
     int sendPeers[2] = {-1, -1};
     int recvPeers[2] = {0, -1};
     ncclDevChannelPeer peerInfo;
-    peerInfo.recv[0].buffs[NCCL_PROTO_SIMPLE] = buff;
+    peerInfo.recv[0].buffs[NCCL_PROTO_LL128] = buff;
     peerInfo.recv[0].head = head;
     peerInfo.recv[0].tail = tail;
     peerInfo.recv[0].step = 0;
@@ -58,7 +56,7 @@ __global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
 }
 
 // test GPU 0 send to GPU 1 using simple protocol
-int sendrecv_test_simple()
+int sendrecv_test_ll128()
 {
     int size = 1024;
     // There are five buffers that needs to be allocated in Simple protocol. The
@@ -92,9 +90,9 @@ int sendrecv_test_simple()
     CUDACHECK(cudaMemcpy(data_src, h_data_src, size * sizeof(float),
                          cudaMemcpyHostToDevice));
     CUDACHECK(cudaSetDevice(0));
-    test_send_simple<<<1, 32>>>(data_src, data_dst, buffs, head, tail, size);
+    test_send_ll128<<<1, 32>>>(data_src, data_dst, buffs, head, tail, size);
     CUDACHECK(cudaSetDevice(1));
-    test_recv_simple<<<1, 32>>>(data_src, data_dst, buffs, head, tail, size);
+    test_recv_ll128<<<1, 32>>>(data_src, data_dst, buffs, head, tail, size);
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaDeviceSynchronize());
     CUDACHECK(cudaSetDevice(1));
@@ -116,5 +114,5 @@ int sendrecv_test_simple()
 int main()
 {
     setbuf(stdout, NULL);
-    sendrecv_test_simple();
+    sendrecv_test_ll128();
 }
