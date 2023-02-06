@@ -22,7 +22,7 @@ __global__ void test_send_ll128(float *data_src, float *data_dst, char *buff,
     ncclDevChannelPeer peerInfo;
     peerInfo.send[0].buffs[NCCL_PROTO_LL128] = buff;
     peerInfo.send[0].head = head;
-    peerInfo.send[0].tail = tail;
+    // peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
     peerInfo.send[0].sizesFifo = NULL;
     peerInfo.send[0].offsFifo = NULL;
@@ -44,7 +44,7 @@ __global__ void test_recv_ll128(float *data_src, float *data_dst, char *buff,
     ncclDevChannelPeer peerInfo;
     peerInfo.recv[0].buffs[NCCL_PROTO_LL128] = buff;
     peerInfo.recv[0].head = head;
-    peerInfo.recv[0].tail = tail;
+    // peerInfo.recv[0].tail = tail;
     peerInfo.recv[0].step = 0;
     peerInfo.recv[0].sizesFifo = NULL;
     peerInfo.recv[0].offsFifo = NULL;
