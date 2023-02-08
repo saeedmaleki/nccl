@@ -40,7 +40,10 @@ int ib_send()
     // call socket connect to establish the connection, exchange the qp and cq
     // and fifo
     while (sendComm == NULL) {
-        NCCLCHECK(ncclIbConnect(1, &handle, (void **)&sendComm));
+        // if this function returns ncclSystemError, it means that the socket
+        // connect op times out, we should retry
+        (ncclIbConnect(1, &handle, (void **)&sendComm));
+        sleep(1);
     }
     // register the sendbuff using ibv_reg_mr
     ibv_mr *mhandle;
@@ -83,6 +86,7 @@ int ib_recv()
     ncclIbRecvComm *recvComm = NULL;
     while (recvComm == NULL) {
         NCCLCHECK(ncclIbAccept(listenComm, (void **)&recvComm));
+        sleep(1);
     }
     // register the recvbuff using ibv_reg_mr
     ibv_mr *mhandle;

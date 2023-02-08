@@ -577,7 +577,7 @@ ncclResult_t ncclIbListen(int dev, void* opaqueHandle, void** listenComm) {
   memset(handle, 0, sizeof(struct ncclIbHandle));
   comm->dev = dev;
   handle->magic = NCCL_SOCKET_MAGIC;
-  NCCLCHECK(ncclSocketInit(&comm->sock, &ncclIbIfAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
+  NCCLCHECK(ncclSocketInit(&comm->sock, &ncclIbIfAddr, handle->magic, ncclSocketTypeNetIb, NULL, 0));
   NCCLCHECK(ncclSocketListen(&comm->sock));
   NCCLCHECK(ncclSocketGetAddr(&comm->sock, &handle->connectAddr));
   *listenComm = comm;
@@ -599,7 +599,7 @@ ncclResult_t ncclIbConnect(int dev, void* opaqueHandle, void** sendComm) {
   }
 
   NCCLCHECK(ncclIbMalloc((void**)&comm, sizeof(struct ncclIbSendComm)));
-  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 1));
+  NCCLCHECK(ncclSocketInit(&comm->sock, &handle->connectAddr, handle->magic, ncclSocketTypeNetIb, NULL, 0));
   stage->comm = comm;
   stage->state = ncclIbCommStateConnect;
   NCCLCHECK(ncclSocketConnect(&comm->sock));
