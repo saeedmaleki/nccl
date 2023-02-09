@@ -74,6 +74,11 @@ int sendrecv_test_simple()
     char *buffs = NULL; // Local for recv, remote for send
     uint64_t *tail;     // Local for recv, remote for send
     uint64_t *head;     // Local for send, remote for recv
+
+    // in prim simple's constructor, it will use ptrExchange to exchange the
+    // recv buffer. The ptrExchange can be allocated on any GPU or host memory.
+    // I think it's a too complex design and suggest to simplify it in the
+    // future.
     void **ptrExchange;
     // enable peer access
     CUDACHECK(cudaSetDevice(0));
