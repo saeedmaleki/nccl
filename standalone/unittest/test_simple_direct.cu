@@ -28,7 +28,7 @@ __global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.send[0].step = 0;
     peerInfo.send[0].sizesFifo = NULL;
     peerInfo.send[0].offsFifo = NULL;
-    peerInfo.send[0].direct = 0xFFFFFFFF;
+    peerInfo.send[0].direct = NCCL_DIRECT_WRITE;
     peerInfo.send[0].ptrExchange = ptrExchange;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, data_src, data_dst, &peerInfo,
@@ -54,7 +54,7 @@ __global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.recv[0].step = 0;
     peerInfo.recv[0].sizesFifo = NULL;
     peerInfo.recv[0].offsFifo = NULL;
-    peerInfo.recv[0].direct = 0xFFFFFFFF;
+    peerInfo.recv[0].direct = NCCL_DIRECT_WRITE;
     peerInfo.recv[0].ptrExchange = ptrExchange;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
         tid, nthreads, recvPeers, sendPeers, data_src, data_dst, &peerInfo,
