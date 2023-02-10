@@ -22,7 +22,7 @@ __global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
     int sendPeers[2] = {0, -1};
     int recvPeers[2] = {-1, -1};
     ncclDevChannelPeer peerInfo;
-    peerInfo.send[0].buffs[NCCL_PROTO_SIMPLE] = (char *)0x0;
+    peerInfo.send[0].buffs[NCCL_PROTO_SIMPLE] = buff;
     peerInfo.send[0].head = head;
     peerInfo.send[0].tail = tail;
     peerInfo.send[0].step = 0;
@@ -30,8 +30,13 @@ __global__ void test_send_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.send[0].offsFifo = NULL;
     peerInfo.send[0].direct = NCCL_DIRECT_WRITE;
     peerInfo.send[0].ptrExchange = ptrExchange;
+    // when we construct the directSend primitive, we don't know the destination
+    // of the data. When we construct the directRecv primitive, we don't know
+    // the source of the data. So in this construc function, we need an
+    // intermidiate ptrExchange to exchange the recv buffer address so that the
+    // sender can write data to the recv buffer directly.
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, recvPeers, sendPeers, data_src, data_dst, &peerInfo,
+        tid, nthreads, recvPeers, sendPeers, data_src, NULL, &peerInfo,
         ncclDevSum, 0);
     prims.directSend(0, 0, size);
     return;
@@ -57,7 +62,7 @@ __global__ void test_recv_simple(float *data_src, float *data_dst, char *buff,
     peerInfo.recv[0].direct = NCCL_DIRECT_WRITE;
     peerInfo.recv[0].ptrExchange = ptrExchange;
     Primitives<float, FuncSum<float>, FanSymmetric<1>, 1, Proto, 0> prims(
-        tid, nthreads, recvPeers, sendPeers, data_src, data_dst, &peerInfo,
+        tid, nthreads, recvPeers, sendPeers, NULL, data_dst, &peerInfo,
         ncclDevSum, 0);
     prims.directRecv(0, size);
     return;
